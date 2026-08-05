@@ -31,7 +31,7 @@ export function NegotiationTimeline({ auditLogs }: NegotiationTimelineProps) {
         {auditLogs.map((log, i) => (
           <li key={i} className="mb-4 ml-4">
             <div className="absolute w-3 h-3 bg-mutuo-primary rounded-full -left-1.5 border border-white" />
-            <time className="text-xs text-mutuo-gray">
+            <time dateTime={log.timestamp} className="text-xs text-mutuo-gray">
               {new Date(log.timestamp).toLocaleString("es-CO")}
             </time>
             <p className="text-sm font-medium">
