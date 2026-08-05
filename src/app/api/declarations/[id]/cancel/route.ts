@@ -1,0 +1,65 @@
+// src/app/api/declarations/[id]/cancel/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { getServerSessionUser } from "@/lib/session";
+import { logAudit, extractRequestMeta } from "@/lib/audit";
+import { sendEmail } from "@/lib/email";
+
+// A declaration can be cancelled by either party any time before the
+// meeting takes place — i.e. while it is still being drafted, negotiated,
+// pending signatures, or after both parties have signed but before the
+// meeting occurs.
+const CANCELLABLE_STATUSES = ["DRAFT", "PENDING_B", "PENDING_A", "NEGOTIATING", "SIGNED"];
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const user = await getServerSessionUser();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  const declaration = await db.declaration.findUnique({
+    where: { id: params.id },
+    include: {
+      creator: { select: { id: true, email: true, fullName: true } },
+      invited: { select: { id: true, email: true, fullName: true } },
+    },
+  });
+
+  if (!declaration) {
+    return NextResponse.json({ error: "Declaración no encontrada" }, { status: 404 });
+  }
+  if (declaration.creatorId !== user.id && declaration.invitedId !== user.id) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  if (!CANCELLABLE_STATUSES.includes(declaration.status)) {
+    return NextResponse.json(
+      { error: "Esta declaración no se puede cancelar en su estado actual" },
+      { status: 409 }
+    );
+  }
+
+  await db.declaration.update({
+    where: { id: params.id },
+    data: { status: "CANCELLED" },
+  });
+
+  const meta = extractRequestMeta(req);
+  await logAudit({
+    userId: user.id,
+    declarationId: params.id,
+    action: "DECLARATION_CANCELLED",
+    ...meta,
+  });
+
+  const otherParty = declaration.creatorId === user.id ? declaration.invited : declaration.creator;
+  if (otherParty) {
+    await sendEmail({
+      to: otherParty.email,
+      subject: "Declaración cancelada",
+      html: `<p>${user.fullName} ha cancelado la declaración de intención mutua programada.</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
+    });
+  }
+
+  return NextResponse.json({ status: "CANCELLED" });
+}
