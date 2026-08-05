@@ -15,7 +15,7 @@ jest.mock("@/lib/audit", () => ({
   extractRequestMeta: jest.fn().mockReturnValue({ ipAddress: "127.0.0.1", userAgent: "test" }),
 }));
 jest.mock("@/lib/email", () => ({
-  sendEmail: jest.fn(),
+  sendNotification: jest.fn(),
 }));
 
 import { db } from "@/lib/db";

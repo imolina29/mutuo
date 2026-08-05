@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getServerSessionUser } from "@/lib/session";
 import { logAudit, extractRequestMeta } from "@/lib/audit";
 import { negotiateSchema } from "@/lib/validations";
+import { isBlocked } from "@/lib/anti-abuse";
 
 export async function POST(
   req: NextRequest,
@@ -32,6 +33,11 @@ export async function POST(
 
   if (!isCreator && !isInvited) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  const otherPartyId = isCreator ? declaration.invitedId : declaration.creatorId;
+  if (otherPartyId && (await isBlocked(user.id, otherPartyId))) {
+    return NextResponse.json({ error: "No puedes interactuar con este usuario" }, { status: 403 });
   }
 
   // Check valid status for negotiation

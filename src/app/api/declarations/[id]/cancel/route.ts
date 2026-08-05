@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSessionUser } from "@/lib/session";
 import { logAudit, extractRequestMeta } from "@/lib/audit";
-import { sendEmail } from "@/lib/email";
+import { sendNotification } from "@/lib/email";
 
 // A declaration can be cancelled by either party any time before the
 // meeting takes place — i.e. while it is still being drafted, negotiated,
@@ -54,10 +54,13 @@ export async function POST(
 
   const otherParty = declaration.creatorId === user.id ? declaration.invited : declaration.creator;
   if (otherParty) {
-    await sendEmail({
-      to: otherParty.email,
-      subject: "Declaración cancelada",
-      html: `<p>${user.fullName} ha cancelado la declaración de intención mutua programada.</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
+    await sendNotification({
+      userId: otherParty.id,
+      declarationId: params.id,
+      type: "DECLARATION_CANCELLED",
+      recipientEmail: otherParty.email,
+      recipientName: otherParty.fullName ?? "",
+      context: { cancellerName: user.fullName ?? "" },
     });
   }
 

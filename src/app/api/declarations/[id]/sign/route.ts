@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { getServerSessionUser } from "@/lib/session";
 import { logAudit, extractRequestMeta } from "@/lib/audit";
 import { buildCanonicalDocument, computeHash, requestTimestamp } from "@/lib/seal";
-import { sendEmail } from "@/lib/email";
+import { sendNotification } from "@/lib/email";
+import { isBlocked } from "@/lib/anti-abuse";
 
 export async function POST(
   req: NextRequest,
@@ -38,6 +39,11 @@ export async function POST(
   // If user is neither creator nor invited, reject
   if (!isCreator && !isInvited) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  const otherPartyId = isCreator ? declaration.invitedId : declaration.creatorId;
+  if (otherPartyId && (await isBlocked(user.id, otherPartyId))) {
+    return NextResponse.json({ error: "No puedes interactuar con este usuario" }, { status: 403 });
   }
 
   const meta = extractRequestMeta(req);
@@ -127,17 +133,23 @@ export async function POST(
     });
 
     if (declaration.creator) {
-      await sendEmail({
-        to: declaration.creator.email,
-        subject: "Declaración de intención mutua firmada y sellada",
-        html: `<p>La declaración con ${declaration.invited?.fullName ?? "la otra parte"} ha sido firmada por ambas partes y sellada con validez probatoria.</p><p>Hash del documento: ${result.hash}</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
+      await sendNotification({
+        userId: declaration.creator.id,
+        declarationId: params.id,
+        type: "DECLARATION_SIGNED",
+        recipientEmail: declaration.creator.email,
+        recipientName: declaration.creator.fullName ?? "",
+        context: { hash: result.hash },
       });
     }
     if (declaration.invited) {
-      await sendEmail({
-        to: declaration.invited.email,
-        subject: "Declaración de intención mutua firmada y sellada",
-        html: `<p>La declaración con ${declaration.creator?.fullName ?? "la otra parte"} ha sido firmada por ambas partes y sellada con validez probatoria.</p><p>Hash del documento: ${result.hash}</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
+      await sendNotification({
+        userId: declaration.invited.id,
+        declarationId: params.id,
+        type: "DECLARATION_SIGNED",
+        recipientEmail: declaration.invited.email,
+        recipientName: declaration.invited.fullName ?? "",
+        context: { hash: result.hash },
       });
     }
   }

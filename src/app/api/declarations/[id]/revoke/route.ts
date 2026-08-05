@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSessionUser } from "@/lib/session";
 import { logAudit, extractRequestMeta } from "@/lib/audit";
-import { sendEmail } from "@/lib/email";
+import { sendNotification } from "@/lib/email";
 
 export async function POST(
   req: NextRequest,
@@ -50,10 +50,13 @@ export async function POST(
 
   const otherParty = declaration.creatorId === user.id ? declaration.invited : declaration.creator;
   if (otherParty) {
-    await sendEmail({
-      to: otherParty.email,
-      subject: "Consentimiento de intención revocado",
-      html: `<p>${user.fullName} ha revocado su consentimiento de intención en la declaración mutua. El consentimiento es revocable en cualquier momento.</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
+    await sendNotification({
+      userId: otherParty.id,
+      declarationId: params.id,
+      type: "DECLARATION_REVOKED",
+      recipientEmail: otherParty.email,
+      recipientName: otherParty.fullName ?? "",
+      context: { revokerName: user.fullName ?? "" },
     });
   }
 

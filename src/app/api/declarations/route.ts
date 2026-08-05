@@ -5,6 +5,7 @@ import { getServerSessionUser } from "@/lib/session";
 import { logAudit, extractRequestMeta } from "@/lib/audit";
 import { createDeclarationSchema } from "@/lib/validations";
 import { CLAUSE_TEMPLATES } from "@/lib/clauses";
+import { checkAbuseLimit } from "@/lib/anti-abuse";
 
 export async function POST(req: NextRequest) {
   const user = await getServerSessionUser();
@@ -16,18 +17,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  // Anti-abuse: max 3 active declarations
-  const activeCount = await db.declaration.count({
-    where: {
-      creatorId: user.id,
-      status: { in: ["DRAFT", "PENDING_B", "NEGOTIATING", "PENDING_A", "SIGNED"] },
-    },
-  });
-  if (activeCount >= 3) {
-    return NextResponse.json(
-      { error: "Has alcanzado el máximo de 3 declaraciones activas" },
-      { status: 429 }
-    );
+  // Anti-abuse: max 3 active declarations, 5/day, 24h cooldown after rejections
+  const abuseCheck = await checkAbuseLimit(user.id);
+  if (!abuseCheck.allowed) {
+    return NextResponse.json({ error: abuseCheck.reason }, { status: 429 });
   }
 
   const { meetingDate, meetingPlace, meetingType, clauses } = parsed.data;

@@ -26,7 +26,10 @@ jest.mock("@/lib/seal", () => ({
   requestTimestamp: jest.fn().mockResolvedValue(Buffer.from("tsa-response")),
 }));
 jest.mock("@/lib/email", () => ({
-  sendEmail: jest.fn(),
+  sendNotification: jest.fn(),
+}));
+jest.mock("@/lib/anti-abuse", () => ({
+  isBlocked: jest.fn().mockResolvedValue(false),
 }));
 
 import { db } from "@/lib/db";
