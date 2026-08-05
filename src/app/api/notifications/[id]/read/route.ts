@@ -1,0 +1,24 @@
+// src/app/api/notifications/[id]/read/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { getServerSessionUser } from "@/lib/session";
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const user = await getServerSessionUser();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  const notification = await db.notification.findUnique({ where: { id: params.id } });
+  if (!notification || notification.userId !== user.id) {
+    return NextResponse.json({ error: "No encontrada" }, { status: 404 });
+  }
+
+  await db.notification.update({
+    where: { id: params.id },
+    data: { readAt: new Date() },
+  });
+
+  return NextResponse.json({ read: true });
+}
