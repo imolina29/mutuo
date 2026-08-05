@@ -42,3 +42,22 @@ export interface ClauseData {
   acceptedByB: boolean;
   version: number;
 }
+
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      fullName: string;
+      verified: boolean;
+    };
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    fullName: string;
+    verified: boolean;
+  }
+}
