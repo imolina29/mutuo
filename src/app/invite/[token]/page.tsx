@@ -20,7 +20,7 @@ interface InviteData {
 
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
-  const { data: session, status: authStatus } = useSession();
+  const { status: authStatus } = useSession();
   const router = useRouter();
   const [invite, setInvite] = useState<InviteData | null>(null);
   const [error, setError] = useState<string | null>(null);
