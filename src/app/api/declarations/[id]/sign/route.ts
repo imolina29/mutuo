@@ -44,121 +44,103 @@ export async function POST(
   const now = new Date();
 
   if (isCreator) {
-    // Creator can sign from DRAFT or NEGOTIATING state
     if (declaration.status !== "DRAFT" && declaration.status !== "NEGOTIATING") {
       return NextResponse.json({ error: "No se puede firmar en este estado" }, { status: 409 });
     }
-
-    await db.declaration.update({
-      where: { id: params.id },
-      data: {
-        signedByAAt: now,
-        status: "PENDING_B",
-      },
-    });
-    await logAudit({
-      userId: user.id,
-      declarationId: params.id,
-      action: "DECLARATION_SIGNED_A",
-      ...meta,
-    });
   } else {
-    // Invited can sign from PENDING_B state
     if (declaration.status !== "PENDING_B") {
       return NextResponse.json({ error: "No se puede firmar en este estado" }, { status: 409 });
     }
-
-    await db.declaration.update({
-      where: { id: params.id },
-      data: {
-        signedByBAt: now,
-        invitedId: user.id,
-        status: "PENDING_B", // temporary — will be updated to SIGNED below if A also signed
-      },
-    });
-    await logAudit({
-      userId: user.id,
-      declarationId: params.id,
-      action: "DECLARATION_SIGNED_B",
-      ...meta,
-    });
   }
 
-  // Reload declaration to check if both have now signed
-  const updatedDecl = await db.declaration.findUnique({
-    where: { id: params.id },
-    include: {
-      creator: { select: { id: true, fullName: true, email: true, cedulaNumber: true } },
-      invited: { select: { id: true, fullName: true, email: true, cedulaNumber: true } },
-      clauses: true,
-    },
+  const result = await db.$transaction(async (tx) => {
+    const signData = isCreator
+      ? { signedByAAt: now, status: "PENDING_B" as const }
+      : { signedByBAt: now };
+
+    await tx.declaration.update({
+      where: { id: params.id },
+      data: signData,
+    });
+
+    const bothSigned = isCreator
+      ? false
+      : !!declaration.signedByAAt;
+
+    if (bothSigned) {
+      const canonical = buildCanonicalDocument({
+        id: declaration.id,
+        creatorId: declaration.creatorId,
+        invitedId: declaration.invitedId,
+        meetingDate: declaration.meetingDate,
+        meetingPlace: declaration.meetingPlace,
+        meetingType: declaration.meetingType,
+        signedByAAt: declaration.signedByAAt!,
+        signedByBAt: now,
+        clauses: declaration.clauses.map((c) => ({
+          type: c.type,
+          text: c.text,
+          version: c.version,
+        })),
+        creator: { fullName: declaration.creator!.fullName ?? "", cedulaNumber: declaration.creator!.cedulaNumber },
+        invited: declaration.invited ? { fullName: declaration.invited.fullName ?? "", cedulaNumber: declaration.invited.cedulaNumber } : null,
+      });
+
+      const hash = computeHash(canonical);
+      const tsaResponse = await requestTimestamp(hash);
+
+      await tx.declaration.update({
+        where: { id: params.id },
+        data: {
+          status: "SIGNED",
+          sealedHash: hash,
+          tsaResponse,
+          sealedAt: new Date(),
+        },
+      });
+
+      await tx.clause.updateMany({
+        where: { declarationId: params.id },
+        data: { acceptedByA: true, acceptedByB: true },
+      });
+
+      return { status: "SIGNED" as const, sealed: true, hash };
+    }
+
+    return { status: "pending" as const, sealed: false };
   });
 
-  if (updatedDecl && updatedDecl.signedByAAt && updatedDecl.signedByBAt) {
-    // Both have signed — seal the document
-    const canonical = buildCanonicalDocument({
-      id: updatedDecl.id,
-      creatorId: updatedDecl.creatorId,
-      invitedId: updatedDecl.invitedId,
-      meetingDate: updatedDecl.meetingDate,
-      meetingPlace: updatedDecl.meetingPlace,
-      meetingType: updatedDecl.meetingType,
-      signedByAAt: updatedDecl.signedByAAt,
-      signedByBAt: updatedDecl.signedByBAt,
-      clauses: updatedDecl.clauses.map((c) => ({
-        type: c.type,
-        text: c.text,
-        version: c.version,
-      })),
-      creator: updatedDecl.creator!,
-      invited: updatedDecl.invited!,
-    });
+  await logAudit({
+    userId: user.id,
+    declarationId: params.id,
+    action: isCreator ? "DECLARATION_SIGNED_A" : "DECLARATION_SIGNED_B",
+    ...meta,
+  });
 
-    const hash = computeHash(canonical);
-    const tsaResponse = await requestTimestamp(hash);
-
-    await db.declaration.update({
-      where: { id: params.id },
-      data: {
-        status: "SIGNED",
-        sealedHash: hash,
-        tsaResponse: tsaResponse,
-        sealedAt: new Date(),
-      },
-    });
-
-    // Mark all clauses as accepted by both
-    await db.clause.updateMany({
-      where: { declarationId: params.id },
-      data: { acceptedByA: true, acceptedByB: true },
-    });
-
+  if (result.sealed && result.status === "SIGNED") {
     await logAudit({
       userId: user.id,
       declarationId: params.id,
       action: "DECLARATION_SEALED",
-      details: { hash },
+      details: { hash: result.hash },
       ...meta,
     });
 
-    // Notify both parties by email
-    if (updatedDecl.creator) {
+    if (declaration.creator) {
       await sendEmail({
-        to: updatedDecl.creator.email,
+        to: declaration.creator.email,
         subject: "Declaración de intención mutua firmada y sellada",
-        html: `<p>La declaración con ${updatedDecl.invited?.fullName ?? "la otra parte"} ha sido firmada por ambas partes y sellada con validez probatoria.</p><p>Hash del documento: ${hash}</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
+        html: `<p>La declaración con ${declaration.invited?.fullName ?? "la otra parte"} ha sido firmada por ambas partes y sellada con validez probatoria.</p><p>Hash del documento: ${result.hash}</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
       });
     }
-    if (updatedDecl.invited) {
+    if (declaration.invited) {
       await sendEmail({
-        to: updatedDecl.invited.email,
+        to: declaration.invited.email,
         subject: "Declaración de intención mutua firmada y sellada",
-        html: `<p>La declaración con ${updatedDecl.creator?.fullName ?? "la otra parte"} ha sido firmada por ambas partes y sellada con validez probatoria.</p><p>Hash del documento: ${hash}</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
+        html: `<p>La declaración con ${declaration.creator?.fullName ?? "la otra parte"} ha sido firmada por ambas partes y sellada con validez probatoria.</p><p>Hash del documento: ${result.hash}</p><p>Si necesitas ayuda, llama a la Línea 155.</p>`,
       });
     }
-
-    return NextResponse.json({ status: "SIGNED", sealed: true, hash });
   }
 
-  return NextResponse.json({ status: "pending", sealed: false });
+  return NextResponse.json(result);
 }

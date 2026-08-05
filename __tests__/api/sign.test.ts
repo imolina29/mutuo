@@ -1,11 +1,16 @@
 // __tests__/api/sign.test.ts
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
+const mockTx = {
+  declaration: { findUnique: jest.fn(), update: jest.fn() },
+  clause: { updateMany: jest.fn() },
+};
 jest.mock("@/lib/db", () => ({
   db: {
     declaration: { findUnique: jest.fn(), update: jest.fn() },
     clause: { updateMany: jest.fn() },
     user: { findUnique: jest.fn() },
+    $transaction: jest.fn((fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
   },
 }));
 jest.mock("@/lib/session", () => ({
@@ -81,11 +86,8 @@ describe("POST /api/declarations/[id]/sign", () => {
       clauses: [{ id: "c1", type: "VOLUNTARY_MEETING", text: "Encuentro voluntario", version: 1 }],
     };
 
-    (db.declaration.findUnique as jest.Mock)
-      .mockResolvedValueOnce(baseDecl)
-      .mockResolvedValueOnce({ ...baseDecl, signedByAAt: new Date(), signedByBAt: null });
-
-    (db.declaration.update as jest.Mock).mockResolvedValue({});
+    (db.declaration.findUnique as jest.Mock).mockResolvedValueOnce(baseDecl);
+    (mockTx.declaration.update as jest.Mock).mockResolvedValue({});
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });
@@ -112,16 +114,9 @@ describe("POST /api/declarations/[id]/sign", () => {
       clauses: [{ id: "c1", type: "VOLUNTARY_MEETING", text: "Encuentro voluntario", version: 1 }],
     };
 
-    (db.declaration.findUnique as jest.Mock)
-      .mockResolvedValueOnce(baseDecl)
-      .mockResolvedValueOnce({
-        ...baseDecl,
-        signedByAAt: new Date("2026-08-01T10:00:00Z"),
-        signedByBAt: new Date(),
-      });
-
-    (db.declaration.update as jest.Mock).mockResolvedValue({});
-    (db.clause.updateMany as jest.Mock).mockResolvedValue({});
+    (db.declaration.findUnique as jest.Mock).mockResolvedValueOnce(baseDecl);
+    (mockTx.declaration.update as jest.Mock).mockResolvedValue({});
+    (mockTx.clause.updateMany as jest.Mock).mockResolvedValue({});
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });

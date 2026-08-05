@@ -50,8 +50,8 @@ export async function GET(
         text: c.text,
         version: c.version,
       })),
-      creator: declaration.creator!,
-      invited: declaration.invited ?? null,
+      creator: { fullName: declaration.creator!.fullName ?? "", cedulaNumber: declaration.creator!.cedulaNumber },
+      invited: declaration.invited ? { fullName: declaration.invited.fullName ?? "", cedulaNumber: declaration.invited.cedulaNumber } : null,
     },
     declaration.sealedHash
   );
