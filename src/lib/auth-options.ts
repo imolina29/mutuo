@@ -30,8 +30,9 @@ export const authOptions: NextAuthOptions = {
         const dbUser = await db.user.findUnique({ where: { email: user.email! } });
         if (dbUser) {
           token.id = dbUser.id;
-          token.fullName = dbUser.fullName;
+          token.fullName = dbUser.fullName ?? "";
           token.verified = dbUser.verified;
+          token.profileComplete = !!(dbUser.fullName && dbUser.cedulaNumber);
         }
       }
       return token;
@@ -41,6 +42,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.fullName = token.fullName as string;
         session.user.verified = token.verified as boolean;
+        session.user.profileComplete = token.profileComplete as boolean;
       }
       return session;
     },

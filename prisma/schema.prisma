@@ -12,12 +12,13 @@ model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
   phone        String?
-  fullName     String   @map("full_name")
+  fullName     String?  @map("full_name")
   cedulaNumber String?  @map("cedula_number")
   verified     Boolean  @default(false)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  accounts             Account[]
   identityVerification IdentityVerification?
   createdDeclarations  Declaration[]         @relation("Creator")
   invitedDeclarations  Declaration[]         @relation("Invited")
@@ -30,6 +31,26 @@ model User {
   reportedBy           Report[]              @relation("Reported")
 
   @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
 }
 
 model IdentityVerification {

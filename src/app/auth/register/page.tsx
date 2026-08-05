@@ -13,18 +13,30 @@ export default function RegisterPage() {
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!acceptedTerms || !acceptedPrivacy) return;
     setLoading(true);
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    if (res.ok) setSuccess(true);
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        setSuccess(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data?.error ?? "Ocurrió un error al crear tu cuenta. Inténtalo de nuevo.");
+      }
+    } catch {
+      setError("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (success) {
@@ -82,6 +94,11 @@ export default function RegisterPage() {
                 </Label>
               </div>
             </div>
+            {error && (
+              <p role="alert" className="text-sm text-red-600">
+                {error}
+              </p>
+            )}
             <Button type="submit" className="w-full bg-mutuo-primary hover:bg-mutuo-primary-light" disabled={loading || !acceptedTerms || !acceptedPrivacy}>
               {loading ? "Registrando..." : "Crear cuenta"}
             </Button>

@@ -9,5 +9,6 @@ export async function getServerSessionUser() {
     email: session.user.email!,
     fullName: session.user.fullName,
     verified: session.user.verified,
+    profileComplete: session.user.profileComplete,
   };
 }
