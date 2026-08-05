@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/components/providers/session-provider";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -21,8 +24,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${inter.className} antialiased`}>
-        <SessionProvider>{children}</SessionProvider>
+      <body className={`${inter.className} antialiased flex flex-col min-h-screen`}>
+        <SessionProvider>
+          <DisclaimerBanner />
+          <Header />
+          <div className="flex-1 flex flex-col">{children}</div>
+          <Footer />
+        </SessionProvider>
       </body>
     </html>
   );
