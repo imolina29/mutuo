@@ -1,0 +1,235 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  phone        String?
+  fullName     String?  @map("full_name")
+  cedulaNumber String?  @map("cedula_number")
+  verified     Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  accounts             Account[]
+  identityVerification IdentityVerification?
+  createdDeclarations  Declaration[]         @relation("Creator")
+  invitedDeclarations  Declaration[]         @relation("Invited")
+  postMeetings         PostMeeting[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  blockedUsers         UserBlock[]           @relation("Blocker")
+  blockedByUsers       UserBlock[]           @relation("Blocked")
+  reports              Report[]              @relation("Reporter")
+  reportedBy           Report[]              @relation("Reported")
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model IdentityVerification {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  cedulaFront String   @map("cedula_front")
+  cedulaBack  String   @map("cedula_back")
+  selfie      String
+  matchScore  Float?   @map("match_score")
+  verifiedAt  DateTime @default(now()) @map("verified_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("identity_verifications")
+}
+
+enum DeclarationStatus {
+  DRAFT
+  PENDING_B
+  NEGOTIATING
+  PENDING_A
+  EXPIRED
+  REJECTED
+  SIGNED
+  CANCELLED
+  REVOKED
+  COMPLETED
+}
+
+enum ClauseType {
+  VOLUNTARY_MEETING
+  NO_SUBSTANCES
+  RESPECT_WITHDRAWAL
+  NO_RECORDING
+  PROFESSIONAL_CONTEXT
+  CUSTOM
+}
+
+model Declaration {
+  id                   String            @id @default(uuid()) @db.Uuid
+  creatorId            String            @map("creator_id") @db.Uuid
+  invitedId            String?           @map("invited_id") @db.Uuid
+  status               DeclarationStatus @default(DRAFT)
+  inviteToken          String            @unique @default(uuid()) @map("invite_token") @db.Uuid
+  inviteTokenExpiresAt DateTime?         @map("invite_token_expires_at")
+  meetingDate          DateTime?         @map("meeting_date")
+  meetingPlace         String?           @map("meeting_place")
+  meetingType          String?           @map("meeting_type")
+  currentRound         Int               @default(0) @map("current_round")
+  maxRounds            Int               @default(3) @map("max_rounds")
+  signedByAAt          DateTime?         @map("signed_by_a_at")
+  signedByBAt          DateTime?         @map("signed_by_b_at")
+  sealedHash           String?           @map("sealed_hash")
+  tsaResponse          Bytes?            @map("tsa_response")
+  sealedAt             DateTime?         @map("sealed_at")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  creator       User          @relation("Creator", fields: [creatorId], references: [id])
+  invited       User?         @relation("Invited", fields: [invitedId], references: [id])
+  clauses       Clause[]
+  postMeetings  PostMeeting[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+
+  @@map("declarations")
+}
+
+model Clause {
+  id            String     @id @default(uuid()) @db.Uuid
+  declarationId String     @map("declaration_id") @db.Uuid
+  type          ClauseType
+  text          String
+  acceptedByA   Boolean    @default(false) @map("accepted_by_a")
+  acceptedByB   Boolean    @default(false) @map("accepted_by_b")
+  version       Int        @default(1)
+
+  declaration Declaration @relation(fields: [declarationId], references: [id])
+
+  @@map("clauses")
+}
+
+enum PostMeetingStatus {
+  OK
+  WITHDREW
+  OTHER_WITHDREW
+  NOT_HELD
+}
+
+model PostMeeting {
+  id            String            @id @default(uuid()) @db.Uuid
+  declarationId String            @map("declaration_id") @db.Uuid
+  userId        String            @map("user_id") @db.Uuid
+  status        PostMeetingStatus
+  notes         String?
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  declaration Declaration @relation(fields: [declarationId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@unique([declarationId, userId])
+  @@map("post_meetings")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  declarationId String?  @map("declaration_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  action        String
+  details       Json?
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  timestamp     DateTime @default(now())
+
+  declaration Declaration? @relation(fields: [declarationId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+enum NotificationType {
+  INVITATION_RECEIVED
+  INVITATION_ACCEPTED
+  INVITATION_REJECTED
+  CHANGES_PROPOSED
+  CHANGES_ACCEPTED
+  CHANGES_REJECTED
+  DECLARATION_SIGNED
+  DECLARATION_CANCELLED
+  DECLARATION_REVOKED
+  POST_MEETING_REMINDER
+}
+
+model Notification {
+  id            String           @id @default(uuid()) @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  declarationId String?          @map("declaration_id") @db.Uuid
+  type          NotificationType
+  channel       String           @default("email")
+  sentAt        DateTime         @default(now()) @map("sent_at")
+  readAt        DateTime?        @map("read_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  declaration Declaration? @relation(fields: [declarationId], references: [id])
+
+  @@map("notifications")
+}
+
+model UserBlock {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @map("blocker_id") @db.Uuid
+  blockedId String   @map("blocked_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id])
+  blocked User @relation("Blocked", fields: [blockedId], references: [id])
+
+  @@unique([blockerId, blockedId])
+  @@map("user_blocks")
+}
+
+model Report {
+  id         String   @id @default(uuid()) @db.Uuid
+  reporterId String   @map("reporter_id") @db.Uuid
+  reportedId String   @map("reported_id") @db.Uuid
+  reason     String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id])
+  reported User @relation("Reported", fields: [reportedId], references: [id])
+
+  @@map("reports")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
