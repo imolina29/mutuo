@@ -56,6 +56,17 @@ export default function ProfilePage() {
           >
             Usuarios bloqueados
           </Link>
+          <div className="pt-4 border-t">
+            <Link
+              href="/profile/delete"
+              className="text-sm text-red-600 hover:text-red-800 underline"
+            >
+              Eliminar mi cuenta y datos personales
+            </Link>
+            <p className="text-xs text-mutuo-gray mt-1">
+              Conforme a la Ley 1581 de 2012, puedes solicitar la eliminación de tus datos en cualquier momento.
+            </p>
+          </div>
           <p className="text-xs text-mutuo-gray text-center pt-2 border-t">
             Si necesitas ayuda, llama a la{" "}
             <a href="tel:155" className="font-semibold text-mutuo-primary underline">

@@ -60,9 +60,10 @@ model IdentityVerification {
   cedulaBack  String   @map("cedula_back")
   selfie      String
   matchScore  Float?   @map("match_score")
+  ocrDetails  String?  @map("ocr_details")
   verifiedAt  DateTime @default(now()) @map("verified_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("identity_verifications")
 }
@@ -128,7 +129,7 @@ model Clause {
   acceptedByB   Boolean    @default(false) @map("accepted_by_b")
   version       Int        @default(1)
 
-  declaration Declaration @relation(fields: [declarationId], references: [id])
+  declaration Declaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
 
   @@map("clauses")
 }
@@ -148,8 +149,8 @@ model PostMeeting {
   notes         String?
   createdAt     DateTime          @default(now()) @map("created_at")
 
-  declaration Declaration @relation(fields: [declarationId], references: [id])
-  user        User        @relation(fields: [userId], references: [id])
+  declaration Declaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([declarationId, userId])
   @@map("post_meetings")
@@ -166,7 +167,7 @@ model AuditLog {
   timestamp     DateTime @default(now())
 
   declaration Declaration? @relation(fields: [declarationId], references: [id])
-  user        User         @relation(fields: [userId], references: [id])
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("audit_logs")
 }
@@ -193,8 +194,8 @@ model Notification {
   sentAt        DateTime         @default(now()) @map("sent_at")
   readAt        DateTime?        @map("read_at")
 
-  user        User         @relation(fields: [userId], references: [id])
-  declaration Declaration? @relation(fields: [declarationId], references: [id])
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  declaration Declaration? @relation(fields: [declarationId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
@@ -205,8 +206,8 @@ model UserBlock {
   blockedId String   @map("blocked_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
-  blocker User @relation("Blocker", fields: [blockerId], references: [id])
-  blocked User @relation("Blocked", fields: [blockedId], references: [id])
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
 
   @@unique([blockerId, blockedId])
   @@map("user_blocks")
@@ -219,8 +220,8 @@ model Report {
   reason     String
   createdAt  DateTime @default(now()) @map("created_at")
 
-  reporter User @relation("Reporter", fields: [reporterId], references: [id])
-  reported User @relation("Reported", fields: [reportedId], references: [id])
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
 
   @@map("reports")
 }
