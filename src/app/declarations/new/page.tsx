@@ -22,9 +22,22 @@ export default function NewDeclarationPage() {
   const [clauses, setClauses] = useState<SelectedClause[]>([
     { type: VOLUNTARY_TEMPLATE.type, text: VOLUNTARY_TEMPLATE.text },
   ]);
+  const [dateError, setDateError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+
+  function handleNextStep() {
+    const selected = new Date(meetingDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selected < today) {
+      setDateError("La fecha del encuentro debe ser hoy o en el futuro");
+      return;
+    }
+    setDateError(null);
+    setStep(2);
+  }
 
   async function handleCreate() {
     setLoading(true);
@@ -45,7 +58,14 @@ export default function NewDeclarationPage() {
         setInviteToken(data.inviteToken);
         setStep(3);
       } else {
-        setError(typeof data.error === "string" ? data.error : "Error al crear la declaración");
+        if (typeof data.error === "string") {
+          setError(data.error);
+        } else if (data.error?.fieldErrors) {
+          const msgs = Object.values(data.error.fieldErrors).flat();
+          setError((msgs as string[]).join(". ") || "Error al crear la declaración");
+        } else {
+          setError("Error al crear la declaración");
+        }
       }
     } catch {
       setError("Error de conexión al crear la declaración");
@@ -128,11 +148,16 @@ export default function NewDeclarationPage() {
                   id="date"
                   type="datetime-local"
                   value={meetingDate}
-                  onChange={(e) => setMeetingDate(e.target.value)}
+                  onChange={(e) => { setMeetingDate(e.target.value); setDateError(null); }}
                   min={new Date().toISOString().slice(0, 16)}
                   required
                   aria-required="true"
+                  aria-invalid={!!dateError}
+                  className={dateError ? "border-red-500" : ""}
                 />
+                {dateError && (
+                  <p className="text-sm text-red-600" role="alert">{dateError}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="place">Lugar del encuentro</Label>
@@ -157,7 +182,7 @@ export default function NewDeclarationPage() {
                 />
               </div>
               <Button
-                onClick={() => setStep(2)}
+                onClick={handleNextStep}
                 className="w-full bg-mutuo-primary hover:bg-mutuo-primary-light"
                 disabled={!meetingDate || !meetingPlace || !meetingType}
               >
