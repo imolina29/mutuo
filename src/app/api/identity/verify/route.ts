@@ -12,6 +12,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
 const FACE_MATCH_THRESHOLD = 0.6; // Minimum face match score to pass
 
 export async function POST(req: NextRequest) {
+  try {
   const user = await getServerSessionUser();
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -172,4 +173,11 @@ export async function POST(req: NextRequest) {
     matchScore,
     details: allDetails,
   });
+  } catch (err) {
+    console.error("[identity/verify] Unhandled error:", err);
+    return NextResponse.json(
+      { error: "Error interno al verificar identidad. Intenta de nuevo." },
+      { status: 500 }
+    );
+  }
 }

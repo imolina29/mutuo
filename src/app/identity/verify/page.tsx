@@ -29,12 +29,21 @@ export default function IdentityVerifyPage() {
     formData.append("cedulaBack", cedulaBack);
     formData.append("selfie", selfie);
 
-    const res = await fetch("/api/identity/verify", { method: "POST", body: formData });
-    if (res.ok) {
-      router.push("/dashboard");
-    } else {
-      const data = await res.json();
-      setError(data.error ?? "Error al verificar identidad");
+    try {
+      const res = await fetch("/api/identity/verify", { method: "POST", body: formData });
+      if (res.ok) {
+        router.push("/dashboard");
+      } else {
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          setError(data.error ?? "Error al verificar identidad");
+        } catch {
+          setError("Error al verificar identidad. Intenta de nuevo.");
+        }
+      }
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.");
     }
     setLoading(false);
   }

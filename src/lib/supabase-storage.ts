@@ -13,17 +13,27 @@ function getClient() {
 
 /**
  * Ensures the private bucket exists. Called once on first upload.
+ * No mime type restriction — files are encrypted (application/octet-stream).
  */
+let bucketReady = false;
 async function ensureBucket() {
+  if (bucketReady) return;
   const supabase = getClient();
   const { data } = await supabase.storage.getBucket(BUCKET);
   if (!data) {
     await supabase.storage.createBucket(BUCKET, {
       public: false,
       fileSizeLimit: 10 * 1024 * 1024, // 10MB max
-      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+    });
+  } else {
+    // Update existing bucket to remove mime type restrictions
+    await supabase.storage.updateBucket(BUCKET, {
+      public: false,
+      fileSizeLimit: 10 * 1024 * 1024,
+      allowedMimeTypes: null as unknown as string[],
     });
   }
+  bucketReady = true;
 }
 
 /**

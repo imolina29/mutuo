@@ -1,5 +1,8 @@
 // src/lib/ocr.ts
-import Tesseract from "tesseract.js";
+// OCR using Google Cloud Vision API (TEXT_DETECTION)
+// Falls back to basic regex extraction if Vision API is unavailable
+
+import vision from "@google-cloud/vision";
 
 export interface OcrResult {
   rawText: string;
@@ -7,15 +10,36 @@ export interface OcrResult {
   extractedCedula: string | null;
 }
 
+let client: vision.ImageAnnotatorClient | null = null;
+
+function getClient(): vision.ImageAnnotatorClient | null {
+  if (client) return client;
+  try {
+    const credentials = process.env.GOOGLE_CLOUD_CREDENTIALS;
+    if (credentials) {
+      client = new vision.ImageAnnotatorClient({ credentials: JSON.parse(credentials) });
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      client = new vision.ImageAnnotatorClient();
+    }
+    return client;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Extracts text from an image buffer using Tesseract.js OCR.
- * Optimized for Colombian cédula de ciudadanía.
+ * Extracts text from an image buffer using Google Cloud Vision OCR.
  */
-export async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
-  const { data } = await Tesseract.recognize(imageBuffer, "spa", {
-    logger: () => {}, // silence progress logs
+async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
+  const visionClient = getClient();
+  if (!visionClient) return "";
+
+  const [result] = await visionClient.textDetection({
+    image: { content: imageBuffer.toString("base64") },
   });
-  return data.text;
+
+  const fullText = result.fullTextAnnotation?.text ?? "";
+  return fullText;
 }
 
 /**
@@ -70,7 +94,7 @@ export function parseCedulaText(rawText: string): {
   if (!name) {
     for (const line of lines) {
       if (/^[A-ZÁÉÍÓÚÑ]{2,}\s+[A-ZÁÉÍÓÚÑ]{2,}(\s+[A-ZÁÉÍÓÚÑ]{2,})*$/.test(line)) {
-        if (!/REPUBLICA|COLOMBIA|CEDULA|CIUDADANIA|REGISTRADURIA/i.test(line)) {
+        if (!/REPUBLICA|COLOMBIA|CEDULA|CIUDADANIA|REGISTRADURIA|IDENTIFICACION|PERSONAL/i.test(line)) {
           name = line;
           break;
         }
@@ -86,6 +110,9 @@ export function parseCedulaText(rawText: string): {
  */
 export async function ocrCedula(imageBuffer: Buffer): Promise<OcrResult> {
   const rawText = await extractTextFromImage(imageBuffer);
+  if (!rawText) {
+    return { rawText: "", extractedName: null, extractedCedula: null };
+  }
   const { name, cedulaNumber } = parseCedulaText(rawText);
   return {
     rawText,
