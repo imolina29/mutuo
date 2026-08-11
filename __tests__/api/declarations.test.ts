@@ -1,6 +1,8 @@
 // __tests__/api/declarations.test.ts
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
+const FUTURE_DATE = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
 jest.mock("@/lib/db", () => ({
   db: {
     declaration: {
@@ -60,7 +62,7 @@ describe("POST /api/declarations", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        meetingDate: "2026-09-01T18:00:00Z",
+        meetingDate: FUTURE_DATE,
         meetingPlace: "Bogotá",
         meetingType: "cena",
         clauses: [
@@ -91,7 +93,7 @@ describe("POST /api/declarations", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        meetingDate: "2026-09-01T18:00:00Z",
+        meetingDate: FUTURE_DATE,
         meetingPlace: "Bogotá",
         meetingType: "cena",
         clauses: [{ type: "VOLUNTARY_MEETING", text: "Encuentro voluntario" }],

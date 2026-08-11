@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
   const declaration = await db.declaration.create({
     data: {
       creatorId: user.id,
+      status: "PENDING_B",
       meetingDate: new Date(meetingDate),
       meetingPlace,
       meetingType,

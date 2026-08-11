@@ -129,6 +129,7 @@ export default function NewDeclarationPage() {
                   type="datetime-local"
                   value={meetingDate}
                   onChange={(e) => setMeetingDate(e.target.value)}
+                  min={new Date().toISOString().slice(0, 16)}
                   required
                   aria-required="true"
                 />

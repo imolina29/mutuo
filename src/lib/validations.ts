@@ -2,7 +2,15 @@
 import { z } from "zod";
 
 export const createDeclarationSchema = z.object({
-  meetingDate: z.string().datetime(),
+  meetingDate: z.string().datetime().refine(
+    (date) => {
+      const meeting = new Date(date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return meeting >= today;
+    },
+    { message: "La fecha del encuentro debe ser hoy o en el futuro" }
+  ),
   meetingPlace: z.string().min(1).max(200),
   meetingType: z.string().min(1).max(100),
   clauses: z.array(
@@ -35,7 +43,15 @@ export const negotiateSchema = z.object({
       text: z.string().min(1).max(1000),
     })
   ).min(1),
-  meetingDate: z.string().datetime().optional(),
+  meetingDate: z.string().datetime().refine(
+    (date) => {
+      const meeting = new Date(date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return meeting >= today;
+    },
+    { message: "La fecha del encuentro debe ser hoy o en el futuro" }
+  ).optional(),
   meetingPlace: z.string().min(1).max(200).optional(),
   meetingType: z.string().min(1).max(100).optional(),
 });
