@@ -5,11 +5,8 @@ import { db } from "@/lib/db";
 import { getServerSessionUser } from "@/lib/session";
 import { logAudit, extractRequestMeta } from "@/lib/audit";
 import { uploadEncryptedFile } from "@/lib/supabase-storage";
-import { ocrCedula, compareWithProfile } from "@/lib/ocr";
-import { compareFaces } from "@/lib/face-match";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
-const FACE_MATCH_THRESHOLD = 0.6;
 const MIN_VERIFICATION_SCORE = 0.2; // At least one check must pass
 
 export async function POST(req: NextRequest) {
@@ -30,6 +27,11 @@ export async function POST(req: NextRequest) {
     const cedulaFront = formData.get("cedulaFront") as File | null;
     const cedulaBack = formData.get("cedulaBack") as File | null;
     const selfie = formData.get("selfie") as File | null;
+
+    // OCR data from client-side Tesseract.js
+    const ocrRawText = (formData.get("ocrRawText") as string) ?? "";
+    const ocrExtractedName = (formData.get("ocrExtractedName") as string) ?? null;
+    const ocrExtractedCedula = (formData.get("ocrExtractedCedula") as string) ?? null;
 
     if (!cedulaFront || !cedulaBack || !selfie) {
       return NextResponse.json(
@@ -59,104 +61,76 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Read file buffers
-    const frontBuffer = Buffer.from(await cedulaFront.arrayBuffer());
-    const backBuffer = Buffer.from(await cedulaBack.arrayBuffer());
-    const selfieBuffer = Buffer.from(await selfie.arrayBuffer());
-
-    // --- Step 1: OCR on cédula front ---
-    let ocrMatch = { nameMatch: false, cedulaMatch: false, details: "" };
-    let ocrAvailable = false;
-    try {
-      const ocrResult = await ocrCedula(frontBuffer);
-      // Only count as available if we actually extracted text
-      if (ocrResult.rawText.length > 0) {
-        ocrAvailable = true;
-        ocrMatch = compareWithProfile(ocrResult, dbUser.fullName, dbUser.cedulaNumber);
-
-        if (!ocrMatch.cedulaMatch && !ocrMatch.nameMatch) {
-          return NextResponse.json(
-            {
-              error: "Los datos de la cédula no coinciden con tu perfil. Verifica que el nombre y número de cédula en tu perfil sean correctos.",
-              details: ocrMatch.details,
-            },
-            { status: 422 }
-          );
-        }
-      }
-    } catch (ocrError) {
-      console.error("[identity/verify] OCR error:", ocrError);
-    }
-
-    // --- Step 2: Face matching (selfie vs cédula photo) ---
-    let faceScore = 0;
-    let faceDetails = "";
-    let faceAvailable = false;
-    try {
-      const faceMatch = await compareFaces(selfieBuffer, frontBuffer);
-      faceAvailable = true;
-      faceScore = faceMatch.score;
-      faceDetails = faceMatch.details;
-
-      if (!faceMatch.selfieHasFace) {
-        return NextResponse.json(
-          { error: "No se detectó un rostro en la selfie. Toma la foto de frente con buena iluminación." },
-          { status: 422 }
-        );
-      }
-
-      if (faceMatch.score < FACE_MATCH_THRESHOLD) {
-        return NextResponse.json(
-          {
-            error: "El rostro de la selfie no coincide con la foto de la cédula. Intenta con mejor iluminación.",
-            details: faceMatch.details,
-          },
-          { status: 422 }
-        );
-      }
-    } catch (faceError) {
-      console.error("[identity/verify] Face match error:", faceError);
-    }
-
-    // --- SECURITY GATE: at least one verification must have run and passed ---
-    if (!ocrAvailable && !faceAvailable) {
+    // --- SECURITY GATE: OCR data is required ---
+    // The client must have successfully run OCR and extracted text.
+    // Without OCR data, we cannot verify identity and MUST reject.
+    if (!ocrRawText || ocrRawText.trim().length < 10) {
       return NextResponse.json(
         {
-          error: "El servicio de verificación no está disponible en este momento. Tus documentos no fueron almacenados. Intenta más tarde.",
+          error: "No se pudo leer el texto de la cédula. Asegúrate de que la foto sea clara, con buena iluminación y sin reflejos.",
         },
-        { status: 503 }
+        { status: 422 }
       );
     }
 
-    // Calculate combined match score
+    // --- Step 1: Server-side validation of OCR data against profile ---
+    const normalize = (s: string) => s.replace(/[\s.,-]/g, "").toLowerCase();
+    const normName = (s: string) =>
+      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+    let cedulaMatch = false;
+    let nameMatch = false;
+    const details: string[] = [];
+
+    // Compare cédula number
+    if (ocrExtractedCedula) {
+      cedulaMatch = normalize(ocrExtractedCedula) === normalize(dbUser.cedulaNumber);
+      details.push(cedulaMatch ? "Número de cédula coincide ✓" : "Número de cédula no coincide ✗");
+    } else {
+      details.push("No se pudo leer el número de cédula del documento");
+    }
+
+    // Compare name
+    if (ocrExtractedName) {
+      const ocrName = normName(ocrExtractedName);
+      const profileName = normName(dbUser.fullName);
+
+      nameMatch = ocrName.includes(profileName) || profileName.includes(ocrName);
+
+      if (!nameMatch) {
+        const ocrWords = ocrName.split(" ");
+        const profileWords = profileName.split(" ");
+        const matchingWords = ocrWords.filter((w) => profileWords.includes(w));
+        nameMatch = matchingWords.length >= 2;
+      }
+
+      details.push(nameMatch ? "Nombre coincide ✓" : "Nombre no coincide ✗");
+    } else {
+      details.push("No se pudo leer el nombre del documento");
+    }
+
+    // Must match at least one field
+    if (!cedulaMatch && !nameMatch) {
+      return NextResponse.json(
+        {
+          error: "Los datos de la cédula no coinciden con tu perfil. Verifica que el nombre y número de cédula en tu perfil sean correctos, y que la foto de la cédula sea legible.",
+          details: details.join(" · "),
+        },
+        { status: 422 }
+      );
+    }
+
+    // Calculate match score
     let matchScore = 0;
-    if (ocrAvailable) {
-      if (ocrMatch.cedulaMatch) matchScore += 0.2;
-      if (ocrMatch.nameMatch) matchScore += 0.2;
-    }
-    if (faceAvailable) {
-      matchScore += faceScore * 0.6;
-    }
+    if (cedulaMatch) matchScore += 0.5;
+    if (nameMatch) matchScore += 0.5;
 
-    // If only one service ran, scale score accordingly
-    if (ocrAvailable && !faceAvailable) {
-      // OCR only: scale from 0-0.4 to 0-1.0
-      matchScore = matchScore / 0.4;
-    } else if (!ocrAvailable && faceAvailable) {
-      // Face only: scale from 0-0.6 to 0-1.0
-      matchScore = matchScore / 0.6;
-    }
+    const allDetails = details.join(" · ");
 
-    const allDetails = [
-      ocrAvailable ? ocrMatch.details : "OCR no disponible",
-      faceAvailable ? faceDetails : "Face matching no disponible",
-    ].join(" | ");
-
-    // Minimum score required
     if (matchScore < MIN_VERIFICATION_SCORE) {
       return NextResponse.json(
         {
-          error: "No se pudo verificar tu identidad con los documentos proporcionados. Asegúrate de que las fotos sean claras y que los datos en tu perfil coincidan con tu cédula.",
+          error: "No se pudo verificar tu identidad con los documentos proporcionados.",
           details: allDetails,
           matchScore,
         },
@@ -164,7 +138,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // --- Step 3: Upload encrypted files to Supabase Storage ---
+    // --- Step 2: Upload encrypted files to Supabase Storage ---
+    const frontBuffer = Buffer.from(await cedulaFront.arrayBuffer());
+    const backBuffer = Buffer.from(await cedulaBack.arrayBuffer());
+    const selfieBuffer = Buffer.from(await selfie.arrayBuffer());
+
     const folder = `user-${user.id}`;
     const fileId = uuid();
 
@@ -174,7 +152,7 @@ export async function POST(req: NextRequest) {
       uploadEncryptedFile(selfieBuffer, folder, `selfie-${fileId}.enc`),
     ]);
 
-    // --- Step 4: Save to DB and mark verified ---
+    // --- Step 3: Save to DB and mark verified ---
     await db.identityVerification.upsert({
       where: { userId: user.id },
       create: {
@@ -205,12 +183,13 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       action: "IDENTITY_VERIFIED",
       details: {
-        method: ocrAvailable && faceAvailable ? "ocr_face_match" : ocrAvailable ? "ocr_only" : "face_only",
+        method: "client_ocr",
         matchScore,
-        ocrAvailable,
-        faceAvailable,
-        ocrDetails: ocrMatch.details,
-        faceDetails,
+        cedulaMatch,
+        nameMatch,
+        ocrExtractedName,
+        ocrExtractedCedula: ocrExtractedCedula ? "***" : null, // Don't log full cédula number
+        ocrDetails: allDetails,
       },
       ...meta,
     });
