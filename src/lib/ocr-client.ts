@@ -12,7 +12,6 @@ export interface OcrClientResult {
 
 /**
  * Runs OCR on an image file in the browser using Tesseract.js.
- * Returns extracted text, nombres, apellidos, and cédula number.
  */
 export async function ocrCedulaClient(
   file: File,
@@ -43,15 +42,17 @@ export async function ocrCedulaClient(
 /**
  * Parses OCR text from the front of a Colombian cédula.
  *
- * Colombian cédula layout (front):
- *   REPUBLICA DE COLOMBIA
- *   IDENTIFICACION PERSONAL
- *   CEDULA DE CIUDADANIA
- *   NUMERO    1.069.489.619
- *   [APELLIDOS label]
- *   MOLINA RUIZ
- *   [NOMBRES label]
- *   IVAN ERNESTO
+ * IMPORTANT: In Colombian cédulas, the VALUE appears BEFORE the label:
+ *   MOLINA RUIZ        ← value
+ *   APELLIDOS           ← label
+ *   IVAN ERNESTO        ← value
+ *   NOMBRES             ← label
+ *
+ * Common OCR errors on cédulas:
+ *   - "IVAN" → "¡VAN" or "1VAN" (I confused with ¡ or 1)
+ *   - "NOMBRES" → "NDMBRES" or "NQMBRES" (O confused with D/Q)
+ *   - Leading digit of number lost or changed (1 → 4, etc)
+ *   - "NUMERO" → "NUMER0" (O → 0)
  */
 function parseCedulaText(rawText: string): {
   nombres: string | null;
@@ -59,116 +60,94 @@ function parseCedulaText(rawText: string): {
   cedulaNumber: string | null;
 } {
   const lines = rawText
-    .split("\n")
+    .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
 
   // ---- Extract cédula number ----
   let cedulaNumber: string | null = null;
 
-  // Strategy 1: Look for "NUMERO" label followed by number
-  const numeroLineIdx = lines.findIndex((l) => /N[UÚ]MERO/i.test(l));
+  // Strategy 1: Look for "NUMERO" line and extract digits from it
+  const numeroLineIdx = lines.findIndex((l) => /N[UÚ]MER[O0]/i.test(l));
   if (numeroLineIdx !== -1) {
-    const numeroLine = lines[numeroLineIdx];
-    // Number might be on the same line as NUMERO
-    const sameLineMatch = numeroLine.match(/[\d][.\s\d]{7,}/);
-    if (sameLineMatch) {
-      const cleaned = sameLineMatch[0].replace(/[\s.]/g, "");
-      if (cleaned.length >= 8 && cleaned.length <= 10) {
-        cedulaNumber = cleaned;
-      }
+    const line = lines[numeroLineIdx];
+    // Extract all digit groups from this line
+    const digits = line.replace(/[^0-9]/g, "");
+    if (digits.length >= 8 && digits.length <= 11) {
+      cedulaNumber = digits.length > 10 ? digits.slice(-10) : digits;
     }
-    // Or on the next line
+    // Also try the next line if this one didn't have enough digits
     if (!cedulaNumber && numeroLineIdx + 1 < lines.length) {
-      const nextLine = lines[numeroLineIdx + 1];
-      const match = nextLine.match(/[\d][.\s\d]{7,}/);
-      if (match) {
-        const cleaned = match[0].replace(/[\s.]/g, "");
-        if (cleaned.length >= 8 && cleaned.length <= 10) {
-          cedulaNumber = cleaned;
-        }
+      const nextDigits = lines[numeroLineIdx + 1].replace(/[^0-9]/g, "");
+      if (nextDigits.length >= 8 && nextDigits.length <= 10) {
+        cedulaNumber = nextDigits;
       }
     }
   }
 
-  // Strategy 2: Look for formatted number pattern (1.069.489.619)
+  // Strategy 2: Find any formatted number (X.XXX.XXX.XXX or X XXX XXX XXX)
   if (!cedulaNumber) {
-    // Match numbers with dots/spaces as thousand separators
-    const formattedMatch = rawText.match(/\b(\d{1,3}(?:[.\s]\d{3}){2,3})\b/);
-    if (formattedMatch) {
-      const cleaned = formattedMatch[1].replace(/[\s.]/g, "");
-      if (cleaned.length >= 8 && cleaned.length <= 10) {
-        cedulaNumber = cleaned;
-      }
+    const formatted = rawText.match(/(\d{1,3})[.,\s]+(\d{3})[.,\s]+(\d{3})[.,\s]+(\d{3})/);
+    if (formatted) {
+      cedulaNumber = formatted[1] + formatted[2] + formatted[3] + formatted[4];
     }
   }
 
-  // Strategy 3: Look for any 8-10 digit number (exclude years like 1990, 2024)
+  // Strategy 3: Find any 8-10 digit sequence
   if (!cedulaNumber) {
-    const allNumbers = rawText.match(/\b\d{8,10}\b/g) ?? [];
-    for (const num of allNumbers) {
-      // Skip numbers that look like dates or small numbers
-      if (parseInt(num) > 10000000) {
-        cedulaNumber = num;
+    const nums = rawText.match(/\b\d{8,10}\b/g) ?? [];
+    for (const n of nums) {
+      if (parseInt(n) > 10000000) { cedulaNumber = n; break; }
+    }
+  }
+
+  // ---- Extract apellidos and nombres ----
+  // Colombian cédula layout: VALUE appears BEFORE the label
+  let apellidos: string | null = null;
+  let nombres: string | null = null;
+
+  // Find the APELLIDOS label line (may be "APELLIDOS", "APELLIDO", OCR errors)
+  const apellidosLabelIdx = lines.findIndex((l) =>
+    /^A?P?E?LL?I?D[O0]S?$/i.test(l.replace(/[^A-ZÁÉÍÓÚÑa-záéíóúñ]/g, ""))
+  );
+
+  // Find the NOMBRES label line (may be "NOMBRES", "NDMBRES", "NQMBRES", etc.)
+  const nombresLabelIdx = lines.findIndex((l) =>
+    /^N[O0DQ]?M[BV]R[E3]S?$/i.test(l.replace(/[^A-ZÁÉÍÓÚÑa-záéíóúñ0-9]/g, ""))
+  );
+
+  // VALUE is on the line BEFORE the label
+  if (apellidosLabelIdx > 0) {
+    const candidate = lines[apellidosLabelIdx - 1];
+    if (isNameText(candidate)) {
+      apellidos = cleanName(candidate);
+    }
+  }
+
+  if (nombresLabelIdx > 0) {
+    const candidate = lines[nombresLabelIdx - 1];
+    if (isNameText(candidate)) {
+      nombres = cleanName(candidate);
+    }
+  }
+
+  // Fallback: if we found one label, try to find the other value nearby
+  if (apellidos && !nombres && apellidosLabelIdx !== -1) {
+    // Look for name-like text after the apellidos label
+    for (let i = apellidosLabelIdx + 1; i < Math.min(apellidosLabelIdx + 4, lines.length); i++) {
+      if (i === nombresLabelIdx) continue; // skip the NOMBRES label itself
+      if (isNameText(lines[i])) {
+        nombres = cleanName(lines[i]);
         break;
       }
     }
   }
 
-  // Strategy 4: OCR might split/mangle the leading digit — try joining adjacent numbers
-  if (!cedulaNumber) {
-    // Look for patterns like "069.489.619" (missing leading 1) preceded by a single digit
-    const partialMatch = rawText.match(/(\d)[.\s]*(\d{3})[.\s]*(\d{3})[.\s]*(\d{3})/);
-    if (partialMatch) {
-      const joined = partialMatch[1] + partialMatch[2] + partialMatch[3] + partialMatch[4];
-      if (joined.length >= 8 && joined.length <= 10) {
-        cedulaNumber = joined;
-      }
-    }
-  }
-
-  // ---- Extract nombres and apellidos ----
-  let nombres: string | null = null;
-  let apellidos: string | null = null;
-
-  // Find APELLIDOS and NOMBRES labels
-  const apellidosIdx = lines.findIndex((l) => /APELLIDOS?/i.test(l));
-  const nombresIdx = lines.findIndex((l) => /\bNOMBRES?\b/i.test(l));
-
-  if (apellidosIdx !== -1) {
-    // Check if apellidos value is on the same line (after the label)
-    const apellidosLine = lines[apellidosIdx];
-    const afterLabel = apellidosLine.replace(/.*APELLIDOS?\s*/i, "").trim();
-    if (afterLabel && afterLabel.length > 1 && isNameText(afterLabel)) {
-      apellidos = afterLabel;
-    } else if (apellidosIdx + 1 < lines.length) {
-      // Value is on the next line
-      const nextLine = lines[apellidosIdx + 1];
-      if (isNameText(nextLine)) {
-        apellidos = nextLine;
-      }
-    }
-  }
-
-  if (nombresIdx !== -1) {
-    const nombresLine = lines[nombresIdx];
-    const afterLabel = nombresLine.replace(/.*NOMBRES?\s*/i, "").trim();
-    if (afterLabel && afterLabel.length > 1 && isNameText(afterLabel)) {
-      nombres = afterLabel;
-    } else if (nombresIdx + 1 < lines.length) {
-      const nextLine = lines[nombresIdx + 1];
-      if (isNameText(nextLine)) {
-        nombres = nextLine;
-      }
-    }
-  }
-
-  // Fallback: if we found apellidos but not nombres (or vice versa), try adjacent lines
-  if (apellidos && !nombres && apellidosIdx !== -1) {
-    // nombres might be 2 lines after apellidos (apellidos value + nombres label + nombres value)
-    for (let i = apellidosIdx + 2; i < Math.min(apellidosIdx + 5, lines.length); i++) {
-      if (isNameText(lines[i]) && !/APELLIDOS?|NOMBRES?|FIRMA/i.test(lines[i])) {
-        nombres = lines[i];
+  if (nombres && !apellidos && nombresLabelIdx !== -1) {
+    // Look backward from NOMBRES for a name-like text
+    for (let i = nombresLabelIdx - 2; i >= Math.max(0, nombresLabelIdx - 4); i--) {
+      if (isNameText(lines[i])) {
+        apellidos = cleanName(lines[i]);
         break;
       }
     }
@@ -178,20 +157,38 @@ function parseCedulaText(rawText: string): {
 }
 
 /**
- * Checks if a string looks like a person's name (uppercase words, no common headers)
+ * Cleans a name extracted by OCR — fixes common character substitutions.
+ */
+function cleanName(text: string): string {
+  return text
+    .replace(/¡/g, "I")      // ¡VAN → IVAN
+    .replace(/1(?=[A-Z])/g, "I") // 1VAN → IVAN
+    .replace(/0(?=[A-Z])/g, "O") // 0SCAR → OSCAR
+    .replace(/[^\w\sÁÉÍÓÚÑáéíóúñ]/g, "") // Remove stray punctuation
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+/**
+ * Checks if a string looks like a person's name (not a header/label)
  */
 function isNameText(text: string): boolean {
-  const upper = text.trim().toUpperCase();
-  // Must have at least 2 chars, contain letters
-  if (upper.length < 2) return false;
-  if (!/[A-ZÁÉÍÓÚÑ]/.test(upper)) return false;
-  // Exclude common cédula header text
-  const excludePatterns = [
-    /REPUBLICA/i, /COLOMBIA/i, /CEDULA/i, /CIUDADANIA/i,
-    /REGISTRADURIA/i, /IDENTIFICACION/i, /PERSONAL/i,
-    /APELLIDOS?/i, /\bNOMBRES?\b/i, /FIRMA/i, /NUMERO/i,
-    /FECHA/i, /LUGAR/i, /NACIMIENTO/i, /EXPEDICION/i,
-    /SEXO/i, /ESTATURA/i, /GRUPO/i, /RH/i,
+  const cleaned = text.replace(/[^A-ZÁÉÍÓÚÑa-záéíóúñ\s¡1]/g, "").trim();
+  if (cleaned.length < 3) return false;
+
+  // Exclude known header/label text
+  const upper = cleaned.toUpperCase();
+  const excludes = [
+    "REPUBLICA", "COLOMBIA", "CEDULA", "CIUDADANIA",
+    "REGISTRADURIA", "IDENTIFICACION", "PERSONAL",
+    "FIRMA", "NUMERO", "FECHA", "LUGAR", "NACIMIENTO",
+    "EXPEDICION", "SEXO", "ESTATURA", "GRUPO",
   ];
-  return !excludePatterns.some((p) => p.test(upper));
+
+  // If the text IS a label (APELLIDOS, NOMBRES with OCR errors), reject it
+  if (/^A?P?E?LL?I?D[O0]S?$/i.test(upper.replace(/\s/g, ""))) return false;
+  if (/^N[O0DQ]?M[BV]R[E3]S?$/i.test(upper.replace(/\s/g, ""))) return false;
+
+  return !excludes.some((ex) => upper.includes(ex));
 }

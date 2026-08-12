@@ -80,8 +80,10 @@ export async function POST(req: NextRequest) {
 
     // --- Normalize helpers ---
     const normalizeNum = (s: string) => s.replace(/\D/g, "");
+    const cleanOcrName = (s: string) =>
+      s.replace(/¡/g, "I").replace(/1(?=[A-Z])/g, "I").replace(/0(?=[A-Z])/g, "O");
     const normName = (s: string) =>
-      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+      cleanOcrName(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z\s]/g, "").replace(/\s+/g, " ").trim();
 
     interface Check { field: string; passed: boolean; message: string; }
     const checks: Check[] = [];
@@ -91,14 +93,21 @@ export async function POST(req: NextRequest) {
     if (ocrExtractedCedula) {
       const ocrNum = normalizeNum(ocrExtractedCedula);
       const profileNum = normalizeNum(dbUser.cedulaNumber);
+
+      // Exact match
       cedulaMatch = ocrNum === profileNum;
 
-      // Partial match: if OCR missed leading digit
-      if (!cedulaMatch && profileNum.startsWith(ocrNum.substring(0, 1) === "0" ? "" : "") && profileNum.endsWith(ocrNum.slice(-7))) {
-        const overlap = profileNum.slice(-ocrNum.length);
-        if (overlap === ocrNum || profileNum.endsWith(ocrNum)) {
-          cedulaMatch = true;
-        }
+      // Tolerant match: OCR often mangles the first digit (1→4, 1→¡, etc.)
+      // If the last 8+ digits match, consider it a match
+      if (!cedulaMatch && ocrNum.length >= 8 && profileNum.length >= 8) {
+        const ocrSuffix = ocrNum.slice(-8);
+        const profileSuffix = profileNum.slice(-8);
+        cedulaMatch = ocrSuffix === profileSuffix;
+      }
+
+      // Also match if one is a substring of the other (OCR dropped leading digit)
+      if (!cedulaMatch) {
+        cedulaMatch = profileNum.endsWith(ocrNum) || ocrNum.endsWith(profileNum);
       }
 
       checks.push({
