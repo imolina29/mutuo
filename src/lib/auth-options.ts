@@ -6,7 +6,11 @@ import { db } from "@/lib/db";
 import { checkOtpVerifyLimit } from "@/lib/rate-limit";
 import { cleanupExpiredTokens } from "@/lib/cleanup";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
 
 function generateOtp(): string {
   return randomInt(100000, 1000000).toString();
@@ -27,7 +31,7 @@ export async function sendOtp(email: string): Promise<boolean> {
   });
 
   const from = process.env.EMAIL_FROM ?? "onboarding@resend.dev";
-  await resend.emails.send({
+  await getResend().emails.send({
     from,
     to: email,
     subject: `Tu código de verificación: ${otp}`,
