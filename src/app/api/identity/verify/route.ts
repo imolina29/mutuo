@@ -54,17 +54,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Log OCR data for debugging
-    console.log("[identity/verify] OCR data received:", {
-      rawTextLength: ocrRawText?.length,
-      rawTextPreview: ocrRawText?.substring(0, 300),
-      extractedNombres: ocrExtractedNombres,
-      extractedApellidos: ocrExtractedApellidos,
-      extractedCedula: ocrExtractedCedula,
-      profileNombres: dbUser.nombres,
-      profileApellidos: dbUser.apellidos,
-      profileFullName: dbUser.fullName,
-      profileCedula: dbUser.cedulaNumber,
+    // Log only non-PII metadata for debugging
+    console.log("[identity/verify] OCR analysis:", {
+      rawTextLength: ocrRawText?.length ?? 0,
+      hasNombres: !!ocrExtractedNombres,
+      hasApellidos: !!ocrExtractedApellidos,
+      hasCedula: !!ocrExtractedCedula,
     });
 
     // --- SECURITY GATE: OCR data is required ---

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendOtp } from "@/lib/auth-options";
+import { checkOtpSendLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,7 +9,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Correo requerido" }, { status: 400 });
     }
 
-    await sendOtp(email.toLowerCase().trim());
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Rate limit: max 3 OTP sends per email per 15 minutes
+    const limit = checkOtpSendLimit(normalizedEmail);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: `Demasiados intentos. Intenta de nuevo en ${limit.retryAfterSeconds} segundos.` },
+        { status: 429 }
+      );
+    }
+
+    await sendOtp(normalizedEmail);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[send-otp error]", err);

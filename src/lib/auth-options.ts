@@ -1,12 +1,14 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { randomInt } from "crypto";
 import { Resend } from "resend";
 import { db } from "@/lib/db";
+import { checkOtpVerifyLimit } from "@/lib/rate-limit";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 // --- OTP send endpoint (called from login page) ---
@@ -75,15 +77,17 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         try {
-          console.log("[authorize] credentials:", { email: credentials?.email, otp: credentials?.otp });
-
           if (!credentials?.email || !credentials?.otp) {
-            console.log("[authorize] missing credentials");
             return null;
           }
 
+          // Rate limit: max 5 OTP verification attempts per email per 10 minutes
+          const limit = checkOtpVerifyLimit(credentials.email);
+          if (!limit.allowed) {
+            throw new Error("RATE_LIMITED");
+          }
+
           const user = await verifyOtp(credentials.email, credentials.otp);
-          console.log("[authorize] verifyOtp result:", user ? user.id : "null");
 
           if (!user) return null;
 
