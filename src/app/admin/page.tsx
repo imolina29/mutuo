@@ -78,7 +78,7 @@ function timeAgo(timestamp: string): string {
 }
 
 export default function AdminPage() {
-  const { data: session } = useSession();
+  useSession(); // Ensures auth redirect
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
