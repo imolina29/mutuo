@@ -6,12 +6,14 @@ import { logAudit, extractRequestMeta } from "@/lib/audit";
 import { buildCanonicalDocument, computeHash, requestTimestamp } from "@/lib/seal";
 import { sendNotification } from "@/lib/email";
 import { isBlocked } from "@/lib/anti-abuse";
+import { isValidUuid } from "@/lib/validate-uuid";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!isValidUuid(params.id)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
     const user = await getServerSessionUser();
     if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     if (!user.verified) {

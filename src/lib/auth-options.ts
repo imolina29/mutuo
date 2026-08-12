@@ -4,6 +4,7 @@ import { randomInt } from "crypto";
 import { Resend } from "resend";
 import { db } from "@/lib/db";
 import { checkOtpVerifyLimit } from "@/lib/rate-limit";
+import { cleanupExpiredTokens } from "@/lib/cleanup";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -15,6 +16,9 @@ function generateOtp(): string {
 export async function sendOtp(email: string): Promise<boolean> {
   const otp = generateOtp();
   const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
+  // Clean up all expired tokens (piggyback on OTP send — runs frequently enough)
+  cleanupExpiredTokens().catch(() => {}); // fire-and-forget
 
   // Upsert: delete existing token for this email, then create new
   await db.verificationToken.deleteMany({ where: { identifier: email } });
@@ -105,7 +109,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60,
+    maxAge: 7 * 24 * 60 * 60, // 7 days — appropriate for legal platform
   },
   callbacks: {
     async jwt({ token, user }) {

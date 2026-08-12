@@ -1,6 +1,14 @@
 // __tests__/api/sign.test.ts
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
+// Valid UUID test constants
+const DECL_ID = "00000000-0000-4000-8000-000000000001";
+const DECL_ID_MISSING = "00000000-0000-4000-8000-000000000999";
+const USER_A = "00000000-0000-4000-8000-00000000000a";
+const USER_B = "00000000-0000-4000-8000-00000000000b";
+const USER_C = "00000000-0000-4000-8000-00000000000c";
+const CLAUSE_ID = "00000000-0000-4000-8000-0000000000c1";
+
 const mockTx = {
   declaration: { findUniqueOrThrow: jest.fn(), update: jest.fn() },
   clause: { updateMany: jest.fn() },
@@ -43,18 +51,18 @@ describe("POST /api/declarations/[id]/sign", () => {
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(401);
   });
 
   it("rejects if user is not verified", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-b", email: "b@test.com", fullName: "User B", verified: false,
+      id: USER_B, email: "b@test.com", fullName: "User B", verified: false,
     });
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toContain("verificar tu identidad");
@@ -62,31 +70,31 @@ describe("POST /api/declarations/[id]/sign", () => {
 
   it("returns 404 if declaration not found", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-a", email: "a@test.com", fullName: "User A", verified: true,
+      id: USER_A, email: "a@test.com", fullName: "User A", verified: true,
     });
     (db.declaration.findUnique as jest.Mock).mockResolvedValue(null);
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-999" } });
+    const res = await POST(req, { params: { id: DECL_ID_MISSING } });
     expect(res.status).toBe(404);
   });
 
   it("creator can sign a DRAFT declaration", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-a", email: "a@test.com", fullName: "User A", verified: true,
+      id: USER_A, email: "a@test.com", fullName: "User A", verified: true,
     });
 
     const baseDecl = {
-      id: "decl-1",
-      creatorId: "user-a",
-      invitedId: "user-b",
+      id: DECL_ID,
+      creatorId: USER_A,
+      invitedId: USER_B,
       status: "DRAFT",
       signedByAAt: null,
       signedByBAt: null,
-      creator: { id: "user-a", fullName: "User A", email: "a@test.com", cedulaNumber: "1234" },
-      invited: { id: "user-b", fullName: "User B", email: "b@test.com", cedulaNumber: "5678" },
-      clauses: [{ id: "c1", type: "VOLUNTARY_MEETING", text: "Encuentro voluntario", version: 1 }],
+      creator: { id: USER_A, fullName: "User A", email: "a@test.com", cedulaNumber: "1234" },
+      invited: { id: USER_B, fullName: "User B", email: "b@test.com", cedulaNumber: "5678" },
+      clauses: [{ id: CLAUSE_ID, type: "VOLUNTARY_MEETING", text: "Encuentro voluntario", version: 1 }],
     };
 
     (db.declaration.findUnique as jest.Mock).mockResolvedValueOnce(baseDecl);
@@ -98,7 +106,7 @@ describe("POST /api/declarations/[id]/sign", () => {
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.sealed).toBe(false);
@@ -106,19 +114,19 @@ describe("POST /api/declarations/[id]/sign", () => {
 
   it("seals document when both parties have signed", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-b", email: "b@test.com", fullName: "User B", verified: true,
+      id: USER_B, email: "b@test.com", fullName: "User B", verified: true,
     });
 
     const baseDecl = {
-      id: "decl-1",
-      creatorId: "user-a",
-      invitedId: "user-b",
+      id: DECL_ID,
+      creatorId: USER_A,
+      invitedId: USER_B,
       status: "PENDING_B",
       signedByAAt: new Date("2026-08-01T10:00:00Z"),
       signedByBAt: null,
-      creator: { id: "user-a", fullName: "User A", email: "a@test.com", cedulaNumber: "1234" },
-      invited: { id: "user-b", fullName: "User B", email: "b@test.com", cedulaNumber: "5678" },
-      clauses: [{ id: "c1", type: "VOLUNTARY_MEETING", text: "Encuentro voluntario", version: 1 }],
+      creator: { id: USER_A, fullName: "User A", email: "a@test.com", cedulaNumber: "1234" },
+      invited: { id: USER_B, fullName: "User B", email: "b@test.com", cedulaNumber: "5678" },
+      clauses: [{ id: CLAUSE_ID, type: "VOLUNTARY_MEETING", text: "Encuentro voluntario", version: 1 }],
     };
 
     (db.declaration.findUnique as jest.Mock).mockResolvedValueOnce(baseDecl);
@@ -133,7 +141,7 @@ describe("POST /api/declarations/[id]/sign", () => {
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.sealed).toBe(true);
@@ -142,18 +150,18 @@ describe("POST /api/declarations/[id]/sign", () => {
 
   it("rejects unauthorized user (not creator nor invited)", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-c", email: "c@test.com", fullName: "User C", verified: true,
+      id: USER_C, email: "c@test.com", fullName: "User C", verified: true,
     });
 
     const baseDecl = {
-      id: "decl-1",
-      creatorId: "user-a",
-      invitedId: "user-b",
+      id: DECL_ID,
+      creatorId: USER_A,
+      invitedId: USER_B,
       status: "PENDING_B",
       signedByAAt: null,
       signedByBAt: null,
-      creator: { id: "user-a", fullName: "User A", email: "a@test.com", cedulaNumber: "1234" },
-      invited: { id: "user-b", fullName: "User B", email: "b@test.com", cedulaNumber: "5678" },
+      creator: { id: USER_A, fullName: "User A", email: "a@test.com", cedulaNumber: "1234" },
+      invited: { id: USER_B, fullName: "User B", email: "b@test.com", cedulaNumber: "5678" },
       clauses: [],
     };
 
@@ -161,7 +169,7 @@ describe("POST /api/declarations/[id]/sign", () => {
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(403);
   });
 });

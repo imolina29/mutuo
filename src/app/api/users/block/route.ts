@@ -35,3 +35,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Error al bloquear usuario" }, { status: 500 });
   }
 }
+
+export async function GET() {
+  try {
+    const user = await getServerSessionUser();
+    if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+    const blocks = await db.userBlock.findMany({
+      where: { blockerId: user.id },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json(blocks);
+  } catch (err) {
+    console.error("[block/GET] Error:", err);
+    return NextResponse.json({ error: "Error al obtener bloqueados" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await getServerSessionUser();
+    if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+    const body = await req.json().catch(() => null);
+    if (!body?.blockedId) return NextResponse.json({ error: "blockedId requerido" }, { status: 400 });
+
+    await db.userBlock.deleteMany({
+      where: { blockerId: user.id, blockedId: body.blockedId },
+    });
+
+    const meta = extractRequestMeta(req);
+    await logAudit({ userId: user.id, action: "USER_UNBLOCKED", details: { blockedId: body.blockedId }, ...meta });
+
+    return NextResponse.json({ unblocked: true });
+  } catch (err) {
+    console.error("[block/DELETE] Error:", err);
+    return NextResponse.json({ error: "Error al desbloquear usuario" }, { status: 500 });
+  }
+}

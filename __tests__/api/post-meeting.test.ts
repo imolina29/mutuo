@@ -1,6 +1,12 @@
 // __tests__/api/post-meeting.test.ts
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
+// Valid UUID test constants
+const DECL_ID = "00000000-0000-4000-8000-000000000001";
+const USER_A = "00000000-0000-4000-8000-00000000000a";
+const USER_B = "00000000-0000-4000-8000-00000000000b";
+const USER_C = "00000000-0000-4000-8000-00000000000c";
+
 const mockTx = {
   declaration: { findUnique: jest.fn(), update: jest.fn() },
   postMeeting: { create: jest.fn(), count: jest.fn() },
@@ -38,13 +44,13 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "OK" }),
     });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(401);
   });
 
   it("rejects invalid body", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-a", email: "a@test.com", fullName: "A", verified: true,
+      id: USER_A, email: "a@test.com", fullName: "A", verified: true,
     });
 
     const { POST } = require("@/app/api/declarations/[id]/post-meeting/route");
@@ -53,13 +59,13 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "NOT_A_STATUS" }),
     });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(400);
   });
 
   it("returns 404 if declaration not found", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-a", email: "a@test.com", fullName: "A", verified: true,
+      id: USER_A, email: "a@test.com", fullName: "A", verified: true,
     });
     // Transaction mock: findUnique returns null → throws NOT_FOUND
     (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue(null);
@@ -70,16 +76,16 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "OK" }),
     });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(404);
   });
 
   it("rejects users who are not a party to the declaration", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-c", email: "c@test.com", fullName: "C", verified: true,
+      id: USER_C, email: "c@test.com", fullName: "C", verified: true,
     });
     (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue({
-      id: "decl-1", status: "SIGNED", creatorId: "user-a", invitedId: "user-b",
+      id: DECL_ID, status: "SIGNED", creatorId: USER_A, invitedId: USER_B,
     });
 
     const { POST } = require("@/app/api/declarations/[id]/post-meeting/route");
@@ -88,16 +94,16 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "OK" }),
     });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(403);
   });
 
   it("rejects if declaration is not signed", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-a", email: "a@test.com", fullName: "A", verified: true,
+      id: USER_A, email: "a@test.com", fullName: "A", verified: true,
     });
     (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue({
-      id: "decl-1", status: "PENDING_B", creatorId: "user-a", invitedId: "user-b",
+      id: DECL_ID, status: "PENDING_B", creatorId: USER_A, invitedId: USER_B,
     });
 
     const { POST } = require("@/app/api/declarations/[id]/post-meeting/route");
@@ -106,16 +112,16 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "OK" }),
     });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(409);
   });
 
   it("creates a post-meeting record and keeps status SIGNED when only one party has registered", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-a", email: "a@test.com", fullName: "A", verified: true,
+      id: USER_A, email: "a@test.com", fullName: "A", verified: true,
     });
     (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue({
-      id: "decl-1", status: "SIGNED", creatorId: "user-a", invitedId: "user-b",
+      id: DECL_ID, status: "SIGNED", creatorId: USER_A, invitedId: USER_B,
     });
     (mockTx.postMeeting.create as jest.Mock).mockResolvedValue({});
     (mockTx.postMeeting.count as jest.Mock).mockResolvedValue(1);
@@ -126,20 +132,20 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "OK", notes: "Todo bien" }),
     });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(200);
     expect(mockTx.postMeeting.create).toHaveBeenCalledWith({
-      data: { declarationId: "decl-1", userId: "user-a", status: "OK", notes: "Todo bien" },
+      data: { declarationId: DECL_ID, userId: USER_A, status: "OK", notes: "Todo bien" },
     });
     expect(mockTx.declaration.update).not.toHaveBeenCalled();
   });
 
   it("marks the declaration COMPLETED once both parties have registered", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-b", email: "b@test.com", fullName: "B", verified: true,
+      id: USER_B, email: "b@test.com", fullName: "B", verified: true,
     });
     (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue({
-      id: "decl-1", status: "SIGNED", creatorId: "user-a", invitedId: "user-b",
+      id: DECL_ID, status: "SIGNED", creatorId: USER_A, invitedId: USER_B,
     });
     (mockTx.postMeeting.create as jest.Mock).mockResolvedValue({});
     (mockTx.postMeeting.count as jest.Mock).mockResolvedValue(2);
@@ -151,10 +157,10 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "NOT_HELD" }),
     });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(200);
     expect(mockTx.declaration.update).toHaveBeenCalledWith({
-      where: { id: "decl-1" },
+      where: { id: DECL_ID },
       data: { status: "COMPLETED" },
     });
   });
@@ -168,23 +174,23 @@ describe("POST /api/declarations/[id]/cancel", () => {
 
     const { POST } = require("@/app/api/declarations/[id]/cancel/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(401);
   });
 
   it("rejects users who are not a party to the declaration", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-c", email: "c@test.com", fullName: "C", verified: true,
+      id: USER_C, email: "c@test.com", fullName: "C", verified: true,
     });
     (db.declaration.findUnique as jest.Mock).mockResolvedValue({
-      id: "decl-1", status: "DRAFT", creatorId: "user-a", invitedId: "user-b",
-      creator: { id: "user-a", email: "a@test.com", fullName: "A" },
-      invited: { id: "user-b", email: "b@test.com", fullName: "B" },
+      id: DECL_ID, status: "DRAFT", creatorId: USER_A, invitedId: USER_B,
+      creator: { id: USER_A, email: "a@test.com", fullName: "A" },
+      invited: { id: USER_B, email: "b@test.com", fullName: "B" },
     });
 
     const { POST } = require("@/app/api/declarations/[id]/cancel/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(403);
   });
 
@@ -192,21 +198,21 @@ describe("POST /api/declarations/[id]/cancel", () => {
     "allows cancelling a declaration in %s status",
     async (status) => {
       (getServerSessionUser as jest.Mock).mockResolvedValue({
-        id: "user-a", email: "a@test.com", fullName: "A", verified: true,
+        id: USER_A, email: "a@test.com", fullName: "A", verified: true,
       });
       (db.declaration.findUnique as jest.Mock).mockResolvedValue({
-        id: "decl-1", status, creatorId: "user-a", invitedId: "user-b",
-        creator: { id: "user-a", email: "a@test.com", fullName: "A" },
-        invited: { id: "user-b", email: "b@test.com", fullName: "B" },
+        id: DECL_ID, status, creatorId: USER_A, invitedId: USER_B,
+        creator: { id: USER_A, email: "a@test.com", fullName: "A" },
+        invited: { id: USER_B, email: "b@test.com", fullName: "B" },
       });
       (db.declaration.update as jest.Mock).mockResolvedValue({});
 
       const { POST } = require("@/app/api/declarations/[id]/cancel/route");
       const req = new Request("http://localhost", { method: "POST" });
-      const res = await POST(req, { params: { id: "decl-1" } });
+      const res = await POST(req, { params: { id: DECL_ID } });
       expect(res.status).toBe(200);
       expect(db.declaration.update).toHaveBeenCalledWith({
-        where: { id: "decl-1" },
+        where: { id: DECL_ID },
         data: { status: "CANCELLED" },
       });
     }
@@ -216,17 +222,17 @@ describe("POST /api/declarations/[id]/cancel", () => {
     "rejects cancelling a declaration in %s status",
     async (status) => {
       (getServerSessionUser as jest.Mock).mockResolvedValue({
-        id: "user-a", email: "a@test.com", fullName: "A", verified: true,
+        id: USER_A, email: "a@test.com", fullName: "A", verified: true,
       });
       (db.declaration.findUnique as jest.Mock).mockResolvedValue({
-        id: "decl-1", status, creatorId: "user-a", invitedId: "user-b",
-        creator: { id: "user-a", email: "a@test.com", fullName: "A" },
-        invited: { id: "user-b", email: "b@test.com", fullName: "B" },
+        id: DECL_ID, status, creatorId: USER_A, invitedId: USER_B,
+        creator: { id: USER_A, email: "a@test.com", fullName: "A" },
+        invited: { id: USER_B, email: "b@test.com", fullName: "B" },
       });
 
       const { POST } = require("@/app/api/declarations/[id]/cancel/route");
       const req = new Request("http://localhost", { method: "POST" });
-      const res = await POST(req, { params: { id: "decl-1" } });
+      const res = await POST(req, { params: { id: DECL_ID } });
       expect(res.status).toBe(409);
     }
   );
@@ -240,27 +246,27 @@ describe("POST /api/declarations/[id]/revoke", () => {
 
     const { POST } = require("@/app/api/declarations/[id]/revoke/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(401);
   });
 
   it("allows revoking a SIGNED declaration", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
-      id: "user-b", email: "b@test.com", fullName: "B", verified: true,
+      id: USER_B, email: "b@test.com", fullName: "B", verified: true,
     });
     (db.declaration.findUnique as jest.Mock).mockResolvedValue({
-      id: "decl-1", status: "SIGNED", creatorId: "user-a", invitedId: "user-b",
-      creator: { id: "user-a", email: "a@test.com", fullName: "A" },
-      invited: { id: "user-b", email: "b@test.com", fullName: "B" },
+      id: DECL_ID, status: "SIGNED", creatorId: USER_A, invitedId: USER_B,
+      creator: { id: USER_A, email: "a@test.com", fullName: "A" },
+      invited: { id: USER_B, email: "b@test.com", fullName: "B" },
     });
     (db.declaration.update as jest.Mock).mockResolvedValue({});
 
     const { POST } = require("@/app/api/declarations/[id]/revoke/route");
     const req = new Request("http://localhost", { method: "POST" });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(200);
     expect(db.declaration.update).toHaveBeenCalledWith({
-      where: { id: "decl-1" },
+      where: { id: DECL_ID },
       data: { status: "REVOKED" },
     });
   });
@@ -269,17 +275,17 @@ describe("POST /api/declarations/[id]/revoke", () => {
     "rejects revoking a declaration in %s status",
     async (status) => {
       (getServerSessionUser as jest.Mock).mockResolvedValue({
-        id: "user-a", email: "a@test.com", fullName: "A", verified: true,
+        id: USER_A, email: "a@test.com", fullName: "A", verified: true,
       });
       (db.declaration.findUnique as jest.Mock).mockResolvedValue({
-        id: "decl-1", status, creatorId: "user-a", invitedId: "user-b",
-        creator: { id: "user-a", email: "a@test.com", fullName: "A" },
-        invited: { id: "user-b", email: "b@test.com", fullName: "B" },
+        id: DECL_ID, status, creatorId: USER_A, invitedId: USER_B,
+        creator: { id: USER_A, email: "a@test.com", fullName: "A" },
+        invited: { id: USER_B, email: "b@test.com", fullName: "B" },
       });
 
       const { POST } = require("@/app/api/declarations/[id]/revoke/route");
       const req = new Request("http://localhost", { method: "POST" });
-      const res = await POST(req, { params: { id: "decl-1" } });
+      const res = await POST(req, { params: { id: DECL_ID } });
       expect(res.status).toBe(409);
     }
   );

@@ -5,12 +5,14 @@ import { getServerSessionUser } from "@/lib/session";
 import { logAudit, extractRequestMeta } from "@/lib/audit";
 import { negotiateSchema } from "@/lib/validations";
 import { isBlocked } from "@/lib/anti-abuse";
+import { isValidUuid } from "@/lib/validate-uuid";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!isValidUuid(params.id)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
     const user = await getServerSessionUser();
     if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 

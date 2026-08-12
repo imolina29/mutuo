@@ -1,7 +1,7 @@
 // src/components/identity/cedula-upload.tsx
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
@@ -14,10 +14,19 @@ export function CedulaUpload({ side, onFileSelected }: CedulaUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
+  // Revoke previous object URL to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     onFileSelected(file);
+    // Revoke old URL before creating new one
+    if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(file));
   }
 

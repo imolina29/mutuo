@@ -1,6 +1,9 @@
 // __tests__/api/negotiate.test.ts
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
+// Valid UUID test constants
+const DECL_ID = "00000000-0000-4000-8000-000000000001";
+
 jest.mock("@/lib/db", () => ({
   db: {
     declaration: { findUnique: jest.fn(), update: jest.fn() },
@@ -33,7 +36,7 @@ describe("POST /api/declarations/[id]/negotiate", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ clauses: [] }),
     });
-    const res = await POST(req, { params: { id: "decl-1" } });
+    const res = await POST(req, { params: { id: DECL_ID } });
     expect(res.status).toBe(401);
   });
 });

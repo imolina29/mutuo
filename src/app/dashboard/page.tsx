@@ -48,16 +48,21 @@ export default function DashboardPage() {
   const [declarations, setDeclarations] = useState<DashboardDeclaration[]>([]);
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/declarations").then((res) => (res.ok ? res.json() : [])),
       fetch("/api/notifications").then((res) => (res.ok ? res.json() : [])),
-    ]).then(([decls, notifs]) => {
-      setDeclarations(decls);
-      setNotifications(notifs);
-      setLoading(false);
-    });
+    ])
+      .then(([decls, notifs]) => {
+        setDeclarations(decls);
+        setNotifications(notifs);
+      })
+      .catch(() => {
+        setError("No se pudieron cargar los datos. Verifica tu conexión.");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   async function markNotificationRead(id: string) {
@@ -122,11 +127,20 @@ export default function DashboardPage() {
         </section>
       )}
 
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-center" role="alert">
+          <p className="text-sm text-red-700">{error}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => window.location.reload()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-mutuo-gray" role="status" aria-live="polite">
           Cargando...
         </p>
-      ) : declarations.length === 0 ? (
+      ) : !error && declarations.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-mutuo-gray mb-4">No tienes declaraciones aún.</p>
           <Button asChild className="bg-mutuo-primary hover:bg-mutuo-primary-light">
