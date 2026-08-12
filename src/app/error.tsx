@@ -4,13 +4,8 @@
 
 import { Button } from "@/components/ui/button";
 
-export default function GlobalError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] px-4 py-8 text-center">
       <h2 className="text-xl font-semibold text-mutuo-primary mb-2">

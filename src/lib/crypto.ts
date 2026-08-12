@@ -5,7 +5,6 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_BYTES = 12; // GCM recommended nonce size
-const AUTH_TAG_BYTES = 16;
 
 function getKey(): Buffer {
   const key = process.env.ENCRYPTION_KEY;
