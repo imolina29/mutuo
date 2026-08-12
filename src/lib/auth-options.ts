@@ -116,9 +116,9 @@ export const authOptions: NextAuthOptions = {
         });
         if (dbUser) {
           token.id = dbUser.id;
-          token.fullName = dbUser.fullName ?? "";
+          token.fullName = dbUser.fullName ?? [dbUser.nombres, dbUser.apellidos].filter(Boolean).join(" ") ?? "";
           token.verified = dbUser.verified;
-          token.profileComplete = !!(dbUser.fullName && dbUser.cedulaNumber);
+          token.profileComplete = !!((dbUser.nombres || dbUser.fullName) && dbUser.cedulaNumber);
         }
       }
       return token;

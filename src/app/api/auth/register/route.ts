@@ -3,10 +3,12 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 
 const registerSchema = z.object({
-  fullName: z.string().min(3).max(100),
-  email: z.string().email(),
+  nombres: z.string().min(2, "Ingresa tus nombres").max(100),
+  apellidos: z.string().min(2, "Ingresa tus apellidos").max(100),
+  email: z.string().email("Correo electrónico no válido"),
   phone: z.string().optional(),
-  cedulaNumber: z.string().min(5).max(15),
+  cedulaNumber: z.string().min(6, "Mínimo 6 dígitos").max(10, "Máximo 10 dígitos")
+    .regex(/^\d+$/, "Solo números, sin puntos ni espacios"),
 });
 
 export async function POST(req: NextRequest) {
@@ -16,15 +18,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { fullName, email, phone, cedulaNumber } = parsed.data;
+  const { nombres, apellidos, email, phone, cedulaNumber } = parsed.data;
 
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
     return NextResponse.json({ error: "Ya existe una cuenta con este correo" }, { status: 409 });
   }
 
+  // fullName = "NOMBRES APELLIDOS" for backward compatibility
+  const fullName = `${nombres.trim()} ${apellidos.trim()}`;
+
   await db.user.create({
-    data: { fullName, email, phone, cedulaNumber },
+    data: {
+      fullName,
+      nombres: nombres.trim().toUpperCase(),
+      apellidos: apellidos.trim().toUpperCase(),
+      email,
+      phone,
+      cedulaNumber: cedulaNumber.replace(/\D/g, ""), // Solo dígitos
+    },
   });
 
   return NextResponse.json({ success: true }, { status: 201 });

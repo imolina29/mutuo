@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { CedulaUpload } from "@/components/identity/cedula-upload";
 import { SelfieCapture } from "@/components/identity/selfie-capture";
-import { ocrCedulaClient } from "@/lib/ocr-client";
+
+interface VerificationCheck {
+  field: string;
+  passed: boolean;
+  message: string;
+}
 
 export default function IdentityVerifyPage() {
   const router = useRouter();
@@ -17,6 +22,7 @@ export default function IdentityVerifyPage() {
   const [selfie, setSelfie] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checks, setChecks] = useState<VerificationCheck[]>([]);
   const [ocrProgress, setOcrProgress] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -26,6 +32,7 @@ export default function IdentityVerifyPage() {
     if (!allReady) return;
     setLoading(true);
     setError(null);
+    setChecks([]);
     setStatusMessage(null);
 
     try {
@@ -34,17 +41,19 @@ export default function IdentityVerifyPage() {
       setOcrProgress(0);
 
       let ocrRawText = "";
-      let ocrExtractedName: string | null = null;
+      let ocrExtractedNombres: string | null = null;
+      let ocrExtractedApellidos: string | null = null;
       let ocrExtractedCedula: string | null = null;
 
       try {
+        const { ocrCedulaClient } = await import("@/lib/ocr-client");
         const ocrResult = await ocrCedulaClient(cedulaFront, (p) => setOcrProgress(p));
         ocrRawText = ocrResult.rawText;
-        ocrExtractedName = ocrResult.extractedName;
+        ocrExtractedNombres = ocrResult.extractedNombres;
+        ocrExtractedApellidos = ocrResult.extractedApellidos;
         ocrExtractedCedula = ocrResult.extractedCedula;
       } catch (ocrErr) {
         console.error("OCR client error:", ocrErr);
-        // OCR failure is not fatal — server will decide if verification can proceed
       }
 
       setOcrProgress(null);
@@ -57,22 +66,30 @@ export default function IdentityVerifyPage() {
       formData.append("cedulaBack", cedulaBack);
       formData.append("selfie", selfie);
       formData.append("ocrRawText", ocrRawText);
-      if (ocrExtractedName) formData.append("ocrExtractedName", ocrExtractedName);
+      if (ocrExtractedNombres) formData.append("ocrExtractedNombres", ocrExtractedNombres);
+      if (ocrExtractedApellidos) formData.append("ocrExtractedApellidos", ocrExtractedApellidos);
       if (ocrExtractedCedula) formData.append("ocrExtractedCedula", ocrExtractedCedula);
 
       const res = await fetch("/api/identity/verify", { method: "POST", body: formData });
 
-      if (res.ok) {
-        setStatusMessage("¡Identidad verificada!");
-        setTimeout(() => router.push("/dashboard"), 1000);
+      const text = await res.text();
+      let data: { error?: string; checks?: VerificationCheck[]; verified?: boolean } = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        setError("Error al verificar identidad. Intenta de nuevo.");
+        setLoading(false);
+        setStatusMessage(null);
+        return;
+      }
+
+      if (res.ok && data.verified) {
+        setStatusMessage("¡Identidad verificada! ✅");
+        setChecks(data.checks ?? []);
+        setTimeout(() => router.push("/dashboard"), 1500);
       } else {
-        const text = await res.text();
-        try {
-          const data = JSON.parse(text);
-          setError(data.error ?? "Error al verificar identidad");
-        } catch {
-          setError("Error al verificar identidad. Intenta de nuevo.");
-        }
+        setError(data.error ?? "Error al verificar identidad");
+        if (data.checks) setChecks(data.checks);
       }
     } catch {
       setError("Error de conexión. Intenta de nuevo.");
@@ -94,6 +111,30 @@ export default function IdentityVerifyPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {error && <Alert variant="destructive">{error}</Alert>}
+
+          {/* Detailed check results */}
+          {checks.length > 0 && (
+            <div className="space-y-2 rounded-lg border p-4 bg-muted/30">
+              <p className="text-sm font-medium text-foreground">Resultado de la verificación:</p>
+              {checks.map((check) => (
+                <div key={check.field} className="flex items-start gap-2 text-sm">
+                  <span className={`mt-0.5 text-lg leading-none ${check.passed ? "text-green-600" : "text-red-500"}`}>
+                    {check.passed ? "✅" : "❌"}
+                  </span>
+                  <span className={check.passed ? "text-green-700" : "text-red-600"}>
+                    {check.message}
+                  </span>
+                </div>
+              ))}
+              {checks.some((c) => !c.passed) && (
+                <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
+                  💡 Asegúrate de que la foto de la cédula sea clara y que los datos en tu perfil
+                  coincidan exactamente con tu cédula de ciudadanía.
+                </p>
+              )}
+            </div>
+          )}
+
           <CedulaUpload side="front" onFileSelected={setCedulaFront} />
           <CedulaUpload side="back" onFileSelected={setCedulaBack} />
           <SelfieCapture onCapture={setSelfie} />

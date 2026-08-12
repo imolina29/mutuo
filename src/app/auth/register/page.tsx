@@ -8,7 +8,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ fullName: "", email: "", phone: "", cedulaNumber: "" });
+  const [form, setForm] = useState({
+    nombres: "",
+    apellidos: "",
+    email: "",
+    phone: "",
+    cedulaNumber: "",
+  });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -60,25 +66,69 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl text-mutuo-primary">Crear cuenta</CardTitle>
-          <CardDescription>Completa tus datos para registrarte en Mutuo.</CardDescription>
+          <CardDescription>
+            Ingresa tus datos <strong>tal como aparecen en tu cédula de ciudadanía</strong>.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="fullName">Nombre completo</Label>
-              <Input id="fullName" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required aria-required="true" />
+              <Label htmlFor="nombres">Nombres <span className="text-xs text-muted-foreground">(como aparecen en tu cédula)</span></Label>
+              <Input
+                id="nombres"
+                placeholder="Ej: IVAN ERNESTO"
+                value={form.nombres}
+                onChange={(e) => setForm({ ...form, nombres: e.target.value })}
+                required
+                aria-required="true"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="apellidos">Apellidos <span className="text-xs text-muted-foreground">(como aparecen en tu cédula)</span></Label>
+              <Input
+                id="apellidos"
+                placeholder="Ej: MOLINA RUIZ"
+                value={form.apellidos}
+                onChange={(e) => setForm({ ...form, apellidos: e.target.value })}
+                required
+                aria-required="true"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cedula">Número de cédula <span className="text-xs text-muted-foreground">(solo números)</span></Label>
+              <Input
+                id="cedula"
+                placeholder="Ej: 1069489619"
+                value={form.cedulaNumber}
+                onChange={(e) => {
+                  // Solo permitir números
+                  const val = e.target.value.replace(/[^0-9]/g, "");
+                  setForm({ ...form, cedulaNumber: val });
+                }}
+                required
+                aria-required="true"
+                inputMode="numeric"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Correo electrónico</Label>
-              <Input id="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required aria-required="true" />
+              <Input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+                aria-required="true"
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Teléfono</Label>
-              <Input id="phone" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cedula">Número de cédula</Label>
-              <Input id="cedula" value={form.cedulaNumber} onChange={(e) => setForm({ ...form, cedulaNumber: e.target.value })} required aria-required="true" />
+              <Label htmlFor="phone">Teléfono <span className="text-xs text-muted-foreground">(opcional)</span></Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
             </div>
             <div className="space-y-3">
               <div className="flex items-start gap-2">

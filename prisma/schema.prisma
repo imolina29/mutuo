@@ -13,6 +13,8 @@ model User {
   email        String   @unique
   phone        String?
   fullName     String?  @map("full_name")
+  nombres      String?
+  apellidos    String?
   cedulaNumber String?  @map("cedula_number")
   verified     Boolean  @default(false)
   createdAt    DateTime @default(now()) @map("created_at")
