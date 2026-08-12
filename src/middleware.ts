@@ -76,6 +76,7 @@ export const config = {
     "/declarations/:path*",
     "/profile/:path*",
     "/identity/:path*",
+    "/admin/:path*",
     "/api/:path*",
   ],
 };
