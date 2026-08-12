@@ -12,6 +12,8 @@ export default function RegisterPage() {
     nombres: "",
     apellidos: "",
     email: "",
+    password: "",
+    confirmPassword: "",
     phone: "",
     cedulaNumber: "",
   });
@@ -24,19 +26,40 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!acceptedTerms || !acceptedPrivacy) return;
+
+    if (form.password !== form.confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    if (form.password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          nombres: form.nombres,
+          apellidos: form.apellidos,
+          email: form.email,
+          password: form.password,
+          phone: form.phone,
+          cedulaNumber: form.cedulaNumber,
+        }),
       });
       if (res.ok) {
         setSuccess(true);
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data?.error ?? "Ocurrió un error al crear tu cuenta. Inténtalo de nuevo.");
+        const msg = typeof data?.error === "string"
+          ? data.error
+          : "Ocurrió un error al crear tu cuenta. Inténtalo de nuevo.";
+        setError(msg);
       }
     } catch {
       setError("No se pudo conectar con el servidor. Inténtalo de nuevo.");
@@ -101,7 +124,6 @@ export default function RegisterPage() {
                 placeholder="Ej: 1069489619"
                 value={form.cedulaNumber}
                 onChange={(e) => {
-                  // Solo permitir números
                   const val = e.target.value.replace(/[^0-9]/g, "");
                   setForm({ ...form, cedulaNumber: val });
                 }}
@@ -119,6 +141,32 @@ export default function RegisterPage() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
                 aria-required="true"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Contraseña <span className="text-xs text-muted-foreground">(mínimo 8 caracteres)</span></Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                aria-required="true"
+                minLength={8}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="••••••••"
+                value={form.confirmPassword}
+                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                required
+                aria-required="true"
+                minLength={8}
               />
             </div>
             <div className="space-y-2">
@@ -153,6 +201,12 @@ export default function RegisterPage() {
               {loading ? "Registrando..." : "Crear cuenta"}
             </Button>
           </form>
+          <p className="mt-4 text-center text-sm text-mutuo-gray">
+            ¿Ya tienes cuenta?{" "}
+            <a href="/auth/login" className="text-mutuo-primary underline">
+              Inicia sesión
+            </a>
+          </p>
         </CardContent>
       </Card>
     </main>
