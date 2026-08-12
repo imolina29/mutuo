@@ -74,6 +74,7 @@ async function verifyOtp(email: string, otp: string) {
 }
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
   // NO adapter — we manage users ourselves
   providers: [
     CredentialsProvider({
