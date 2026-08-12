@@ -94,7 +94,7 @@ enum ClauseType {
 
 model Declaration {
   id                   String            @id @default(uuid()) @db.Uuid
-  creatorId            String            @map("creator_id") @db.Uuid
+  creatorId            String?           @map("creator_id") @db.Uuid
   invitedId            String?           @map("invited_id") @db.Uuid
   status               DeclarationStatus @default(DRAFT)
   inviteToken          String            @unique @default(uuid()) @map("invite_token") @db.Uuid
@@ -112,13 +112,16 @@ model Declaration {
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
 
-  creator       User          @relation("Creator", fields: [creatorId], references: [id])
-  invited       User?         @relation("Invited", fields: [invitedId], references: [id])
+  creator       User?         @relation("Creator", fields: [creatorId], references: [id], onDelete: SetNull)
+  invited       User?         @relation("Invited", fields: [invitedId], references: [id], onDelete: SetNull)
   clauses       Clause[]
   postMeetings  PostMeeting[]
   auditLogs     AuditLog[]
   notifications Notification[]
 
+  @@index([creatorId])
+  @@index([invitedId])
+  @@index([status])
   @@map("declarations")
 }
 
@@ -161,7 +164,7 @@ model PostMeeting {
 model AuditLog {
   id            String   @id @default(uuid()) @db.Uuid
   declarationId String?  @map("declaration_id") @db.Uuid
-  userId        String   @map("user_id") @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
   action        String
   details       Json?
   ipAddress     String?  @map("ip_address")
@@ -169,8 +172,10 @@ model AuditLog {
   timestamp     DateTime @default(now())
 
   declaration Declaration? @relation(fields: [declarationId], references: [id])
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  @@index([userId])
+  @@index([declarationId])
   @@map("audit_logs")
 }
 
@@ -199,6 +204,7 @@ model Notification {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   declaration Declaration? @relation(fields: [declarationId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("notifications")
 }
 

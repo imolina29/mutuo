@@ -1,10 +1,15 @@
 // __tests__/api/post-meeting.test.ts
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
+const mockTx = {
+  declaration: { findUnique: jest.fn(), update: jest.fn() },
+  postMeeting: { create: jest.fn(), count: jest.fn() },
+};
 jest.mock("@/lib/db", () => ({
   db: {
     declaration: { findUnique: jest.fn(), update: jest.fn() },
     postMeeting: { create: jest.fn(), count: jest.fn() },
+    $transaction: jest.fn((fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
   },
 }));
 jest.mock("@/lib/session", () => ({
@@ -56,7 +61,8 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
       id: "user-a", email: "a@test.com", fullName: "A", verified: true,
     });
-    (db.declaration.findUnique as jest.Mock).mockResolvedValue(null);
+    // Transaction mock: findUnique returns null → throws NOT_FOUND
+    (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue(null);
 
     const { POST } = require("@/app/api/declarations/[id]/post-meeting/route");
     const req = new Request("http://localhost", {
@@ -72,7 +78,7 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
       id: "user-c", email: "c@test.com", fullName: "C", verified: true,
     });
-    (db.declaration.findUnique as jest.Mock).mockResolvedValue({
+    (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue({
       id: "decl-1", status: "SIGNED", creatorId: "user-a", invitedId: "user-b",
     });
 
@@ -90,7 +96,7 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
       id: "user-a", email: "a@test.com", fullName: "A", verified: true,
     });
-    (db.declaration.findUnique as jest.Mock).mockResolvedValue({
+    (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue({
       id: "decl-1", status: "PENDING_B", creatorId: "user-a", invitedId: "user-b",
     });
 
@@ -108,11 +114,11 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
       id: "user-a", email: "a@test.com", fullName: "A", verified: true,
     });
-    (db.declaration.findUnique as jest.Mock).mockResolvedValue({
+    (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue({
       id: "decl-1", status: "SIGNED", creatorId: "user-a", invitedId: "user-b",
     });
-    (db.postMeeting.create as jest.Mock).mockResolvedValue({});
-    (db.postMeeting.count as jest.Mock).mockResolvedValue(1);
+    (mockTx.postMeeting.create as jest.Mock).mockResolvedValue({});
+    (mockTx.postMeeting.count as jest.Mock).mockResolvedValue(1);
 
     const { POST } = require("@/app/api/declarations/[id]/post-meeting/route");
     const req = new Request("http://localhost", {
@@ -122,22 +128,22 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
     });
     const res = await POST(req, { params: { id: "decl-1" } });
     expect(res.status).toBe(200);
-    expect(db.postMeeting.create).toHaveBeenCalledWith({
+    expect(mockTx.postMeeting.create).toHaveBeenCalledWith({
       data: { declarationId: "decl-1", userId: "user-a", status: "OK", notes: "Todo bien" },
     });
-    expect(db.declaration.update).not.toHaveBeenCalled();
+    expect(mockTx.declaration.update).not.toHaveBeenCalled();
   });
 
   it("marks the declaration COMPLETED once both parties have registered", async () => {
     (getServerSessionUser as jest.Mock).mockResolvedValue({
       id: "user-b", email: "b@test.com", fullName: "B", verified: true,
     });
-    (db.declaration.findUnique as jest.Mock).mockResolvedValue({
+    (mockTx.declaration.findUnique as jest.Mock).mockResolvedValue({
       id: "decl-1", status: "SIGNED", creatorId: "user-a", invitedId: "user-b",
     });
-    (db.postMeeting.create as jest.Mock).mockResolvedValue({});
-    (db.postMeeting.count as jest.Mock).mockResolvedValue(2);
-    (db.declaration.update as jest.Mock).mockResolvedValue({});
+    (mockTx.postMeeting.create as jest.Mock).mockResolvedValue({});
+    (mockTx.postMeeting.count as jest.Mock).mockResolvedValue(2);
+    (mockTx.declaration.update as jest.Mock).mockResolvedValue({});
 
     const { POST } = require("@/app/api/declarations/[id]/post-meeting/route");
     const req = new Request("http://localhost", {
@@ -147,7 +153,7 @@ describe("POST /api/declarations/[id]/post-meeting", () => {
     });
     const res = await POST(req, { params: { id: "decl-1" } });
     expect(res.status).toBe(200);
-    expect(db.declaration.update).toHaveBeenCalledWith({
+    expect(mockTx.declaration.update).toHaveBeenCalledWith({
       where: { id: "decl-1" },
       data: { status: "COMPLETED" },
     });

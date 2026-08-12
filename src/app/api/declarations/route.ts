@@ -8,77 +8,89 @@ import { CLAUSE_TEMPLATES } from "@/lib/clauses";
 import { checkAbuseLimit } from "@/lib/anti-abuse";
 
 export async function POST(req: NextRequest) {
-  const user = await getServerSessionUser();
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  try {
+    const user = await getServerSessionUser();
+    if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = createDeclarationSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+    const body = await req.json().catch(() => null);
+    if (!body) return NextResponse.json({ error: "Body inválido" }, { status: 400 });
 
-  // Anti-abuse: max 3 active declarations, 5/day, 24h cooldown after rejections
-  const abuseCheck = await checkAbuseLimit(user.id);
-  if (!abuseCheck.allowed) {
-    return NextResponse.json({ error: abuseCheck.reason }, { status: 429 });
-  }
+    const parsed = createDeclarationSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
 
-  const { meetingDate, meetingPlace, meetingType, clauses } = parsed.data;
+    // Anti-abuse: max 3 active declarations, 5/day, 24h cooldown after rejections
+    const abuseCheck = await checkAbuseLimit(user.id);
+    if (!abuseCheck.allowed) {
+      return NextResponse.json({ error: abuseCheck.reason }, { status: 429 });
+    }
 
-  // Ensure VOLUNTARY_MEETING is always included
-  const hasVoluntary = clauses.some((c) => c.type === "VOLUNTARY_MEETING");
-  if (!hasVoluntary) {
-    const template = CLAUSE_TEMPLATES.find((t) => t.type === "VOLUNTARY_MEETING")!;
-    clauses.unshift({ type: "VOLUNTARY_MEETING", text: template.text });
-  }
+    const { meetingDate, meetingPlace, meetingType, clauses } = parsed.data;
 
-  const declaration = await db.declaration.create({
-    data: {
-      creatorId: user.id,
-      status: "PENDING_B",
-      meetingDate: new Date(meetingDate),
-      meetingPlace,
-      meetingType,
-      inviteTokenExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
-      clauses: {
-        create: clauses.map((c) => ({
-          type: c.type,
-          text: c.text,
-          acceptedByA: true,
-          acceptedByB: false,
-        })),
+    // Ensure VOLUNTARY_MEETING is always included
+    const hasVoluntary = clauses.some((c) => c.type === "VOLUNTARY_MEETING");
+    if (!hasVoluntary) {
+      const template = CLAUSE_TEMPLATES.find((t) => t.type === "VOLUNTARY_MEETING")!;
+      clauses.unshift({ type: "VOLUNTARY_MEETING", text: template.text });
+    }
+
+    const declaration = await db.declaration.create({
+      data: {
+        creatorId: user.id,
+        status: "PENDING_B",
+        meetingDate: new Date(meetingDate),
+        meetingPlace,
+        meetingType,
+        inviteTokenExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        clauses: {
+          create: clauses.map((c) => ({
+            type: c.type,
+            text: c.text,
+            acceptedByA: true,
+            acceptedByB: false,
+          })),
+        },
       },
-    },
-    select: { id: true, inviteToken: true },
-  });
+      select: { id: true, inviteToken: true },
+    });
 
-  const meta = extractRequestMeta(req);
-  await logAudit({
-    userId: user.id,
-    declarationId: declaration.id,
-    action: "DECLARATION_CREATED",
-    details: { meetingDate, meetingPlace, meetingType, clauseCount: clauses.length },
-    ...meta,
-  });
+    const meta = extractRequestMeta(req);
+    await logAudit({
+      userId: user.id,
+      declarationId: declaration.id,
+      action: "DECLARATION_CREATED",
+      details: { meetingDate, meetingPlace, meetingType, clauseCount: clauses.length },
+      ...meta,
+    });
 
-  return NextResponse.json(declaration, { status: 201 });
+    return NextResponse.json(declaration, { status: 201 });
+  } catch (err) {
+    console.error("[declarations/POST] Error:", err);
+    return NextResponse.json({ error: "Error al crear la declaración" }, { status: 500 });
+  }
 }
 
 export async function GET() {
-  const user = await getServerSessionUser();
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  try {
+    const user = await getServerSessionUser();
+    if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const declarations = await db.declaration.findMany({
-    where: {
-      OR: [{ creatorId: user.id }, { invitedId: user.id }],
-    },
-    include: {
-      creator: { select: { id: true, fullName: true, email: true } },
-      invited: { select: { id: true, fullName: true, email: true } },
-      clauses: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+    const declarations = await db.declaration.findMany({
+      where: {
+        OR: [{ creatorId: user.id }, { invitedId: user.id }],
+      },
+      include: {
+        creator: { select: { id: true, fullName: true, email: true } },
+        invited: { select: { id: true, fullName: true, email: true } },
+        clauses: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
-  return NextResponse.json(declarations);
+    return NextResponse.json(declarations);
+  } catch (err) {
+    console.error("[declarations/GET] Error:", err);
+    return NextResponse.json({ error: "Error al obtener declaraciones" }, { status: 500 });
+  }
 }

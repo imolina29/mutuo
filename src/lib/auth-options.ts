@@ -112,9 +112,15 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.email = user.email;
+        token.lastRefreshed = 0; // Force refresh on first login
       }
-      // Refresh profile from DB
-      if (token.email) {
+
+      // Refresh profile from DB — but only every 5 minutes (not every request)
+      const now = Date.now();
+      const lastRefreshed = (token.lastRefreshed as number) ?? 0;
+      const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+      if (token.email && now - lastRefreshed > REFRESH_INTERVAL) {
         const dbUser = await db.user.findUnique({
           where: { email: token.email as string },
         });
@@ -123,8 +129,13 @@ export const authOptions: NextAuthOptions = {
           token.fullName = dbUser.fullName ?? [dbUser.nombres, dbUser.apellidos].filter(Boolean).join(" ") ?? "";
           token.verified = dbUser.verified;
           token.profileComplete = !!((dbUser.nombres || dbUser.fullName) && dbUser.cedulaNumber);
+          token.lastRefreshed = now;
+        } else {
+          // User deleted — clear token to force sign-out
+          return {} as typeof token;
         }
       }
+
       return token;
     },
     async session({ session, token }) {

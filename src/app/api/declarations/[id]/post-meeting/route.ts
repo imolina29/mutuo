@@ -9,63 +9,83 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const user = await getServerSessionUser();
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  try {
+    const user = await getServerSessionUser();
+    if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = postMeetingSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+    const body = await req.json().catch(() => null);
+    if (!body) return NextResponse.json({ error: "Body inválido" }, { status: 400 });
 
-  const declaration = await db.declaration.findUnique({
-    where: { id: params.id },
-  });
+    const parsed = postMeetingSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
 
-  if (!declaration) {
-    return NextResponse.json({ error: "Declaración no encontrada" }, { status: 404 });
-  }
-  if (declaration.creatorId !== user.id && declaration.invitedId !== user.id) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-  }
-  if (declaration.status !== "SIGNED" && declaration.status !== "COMPLETED") {
-    return NextResponse.json(
-      { error: "Solo se puede registrar post-encuentro para declaraciones firmadas" },
-      { status: 409 }
-    );
-  }
+    const { status, notes } = parsed.data;
 
-  const { status, notes } = parsed.data;
+    // Use transaction to prevent double-complete race condition
+    const result = await db.$transaction(async (tx) => {
+      const declaration = await tx.declaration.findUnique({
+        where: { id: params.id },
+      });
 
-  await db.postMeeting.create({
-    data: {
-      declarationId: params.id,
-      userId: user.id,
-      status,
-      notes,
-    },
-  });
+      if (!declaration) throw new Error("NOT_FOUND");
+      if (declaration.creatorId !== user.id && declaration.invitedId !== user.id) {
+        throw new Error("FORBIDDEN");
+      }
+      if (declaration.status !== "SIGNED" && declaration.status !== "COMPLETED") {
+        throw new Error("INVALID_STATUS");
+      }
 
-  // Once both parties have registered what happened, close out the
-  // declaration's lifecycle.
-  const postMeetingCount = await db.postMeeting.count({
-    where: { declarationId: params.id },
-  });
-  if (postMeetingCount >= 2 && declaration.status !== "COMPLETED") {
-    await db.declaration.update({
-      where: { id: params.id },
-      data: { status: "COMPLETED" },
+      await tx.postMeeting.create({
+        data: {
+          declarationId: params.id,
+          userId: user.id,
+          status,
+          notes,
+        },
+      });
+
+      const postMeetingCount = await tx.postMeeting.count({
+        where: { declarationId: params.id },
+      });
+
+      if (postMeetingCount >= 2 && declaration.status !== "COMPLETED") {
+        await tx.declaration.update({
+          where: { id: params.id },
+          data: { status: "COMPLETED" },
+        });
+      }
+
+      return { registered: true };
     });
+
+    const meta = extractRequestMeta(req);
+    await logAudit({
+      userId: user.id,
+      declarationId: params.id,
+      action: "POST_MEETING_REGISTERED",
+      details: { status, notes },
+      ...meta,
+    });
+
+    return NextResponse.json(result);
+  } catch (err) {
+    if (err instanceof Error) {
+      if (err.message === "NOT_FOUND") {
+        return NextResponse.json({ error: "Declaración no encontrada" }, { status: 404 });
+      }
+      if (err.message === "FORBIDDEN") {
+        return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+      }
+      if (err.message === "INVALID_STATUS") {
+        return NextResponse.json(
+          { error: "Solo se puede registrar post-encuentro para declaraciones firmadas" },
+          { status: 409 }
+        );
+      }
+    }
+    console.error("[post-meeting] Error:", err);
+    return NextResponse.json({ error: "Error al registrar post-encuentro" }, { status: 500 });
   }
-
-  const meta = extractRequestMeta(req);
-  await logAudit({
-    userId: user.id,
-    declarationId: params.id,
-    action: "POST_MEETING_REGISTERED",
-    details: { status, notes },
-    ...meta,
-  });
-
-  return NextResponse.json({ registered: true });
 }

@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 
 export interface DeclarationForSealing {
   id: string;
-  creatorId: string;
+  creatorId: string | null;
   invitedId: string | null;
   meetingDate: Date | null;
   meetingPlace: string | null;
@@ -11,7 +11,7 @@ export interface DeclarationForSealing {
   signedByAAt: Date | null;
   signedByBAt: Date | null;
   clauses: { type: string; text: string; version: number }[];
-  creator: { fullName: string; cedulaNumber: string | null };
+  creator: { fullName: string; cedulaNumber: string | null } | null;
   invited: { fullName: string; cedulaNumber: string | null } | null;
 }
 
@@ -28,10 +28,12 @@ export function buildCanonicalDocument(declaration: DeclarationForSealing): stri
     clauses: declaration.clauses
       .map((c) => ({ type: c.type, text: c.text, version: c.version }))
       .sort((a, b) => a.type.localeCompare(b.type)),
-    creator: {
-      fullName: declaration.creator.fullName,
-      cedulaNumber: declaration.creator.cedulaNumber,
-    },
+    creator: declaration.creator
+      ? {
+          fullName: declaration.creator.fullName,
+          cedulaNumber: declaration.creator.cedulaNumber,
+        }
+      : null,
     invited: declaration.invited
       ? {
           fullName: declaration.invited.fullName,

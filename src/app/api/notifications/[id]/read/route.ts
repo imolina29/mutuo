@@ -7,18 +7,23 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const user = await getServerSessionUser();
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  try {
+    const user = await getServerSessionUser();
+    if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const notification = await db.notification.findUnique({ where: { id: params.id } });
-  if (!notification || notification.userId !== user.id) {
-    return NextResponse.json({ error: "No encontrada" }, { status: 404 });
+    const notification = await db.notification.findUnique({ where: { id: params.id } });
+    if (!notification || notification.userId !== user.id) {
+      return NextResponse.json({ error: "No encontrada" }, { status: 404 });
+    }
+
+    await db.notification.update({
+      where: { id: params.id },
+      data: { readAt: new Date() },
+    });
+
+    return NextResponse.json({ read: true });
+  } catch (err) {
+    console.error("[notifications/read] Error:", err);
+    return NextResponse.json({ error: "Error al marcar como leída" }, { status: 500 });
   }
-
-  await db.notification.update({
-    where: { id: params.id },
-    data: { readAt: new Date() },
-  });
-
-  return NextResponse.json({ read: true });
 }

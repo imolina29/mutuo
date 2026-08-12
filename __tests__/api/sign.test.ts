@@ -2,7 +2,7 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
 const mockTx = {
-  declaration: { findUnique: jest.fn(), update: jest.fn() },
+  declaration: { findUniqueOrThrow: jest.fn(), update: jest.fn() },
   clause: { updateMany: jest.fn() },
 };
 jest.mock("@/lib/db", () => ({
@@ -90,6 +90,10 @@ describe("POST /api/declarations/[id]/sign", () => {
     };
 
     (db.declaration.findUnique as jest.Mock).mockResolvedValueOnce(baseDecl);
+    // Inside transaction: findUniqueOrThrow returns current status
+    (mockTx.declaration.findUniqueOrThrow as jest.Mock).mockResolvedValue({
+      status: "DRAFT", signedByAAt: null,
+    });
     (mockTx.declaration.update as jest.Mock).mockResolvedValue({});
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
@@ -118,8 +122,14 @@ describe("POST /api/declarations/[id]/sign", () => {
     };
 
     (db.declaration.findUnique as jest.Mock).mockResolvedValueOnce(baseDecl);
+    // Inside transaction: status is still PENDING_B, signedByAAt exists
+    (mockTx.declaration.findUniqueOrThrow as jest.Mock).mockResolvedValue({
+      status: "PENDING_B", signedByAAt: new Date("2026-08-01T10:00:00Z"),
+    });
     (mockTx.declaration.update as jest.Mock).mockResolvedValue({});
     (mockTx.clause.updateMany as jest.Mock).mockResolvedValue({});
+    // TSA + seal happens outside transaction, uses db.declaration.update
+    (db.declaration.update as jest.Mock).mockResolvedValue({});
 
     const { POST } = require("@/app/api/declarations/[id]/sign/route");
     const req = new Request("http://localhost", { method: "POST" });
