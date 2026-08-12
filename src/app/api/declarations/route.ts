@@ -86,6 +86,7 @@ export async function GET() {
         clauses: true,
       },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
 
     return NextResponse.json(declarations);

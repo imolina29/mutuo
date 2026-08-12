@@ -117,8 +117,8 @@ export async function POST(
             text: c.text,
             version: c.version,
           })),
-          creator: { fullName: declaration.creator?.fullName ?? "", cedulaNumber: declaration.creator?.cedulaNumber },
-          invited: declaration.invited ? { fullName: declaration.invited.fullName ?? "", cedulaNumber: declaration.invited.cedulaNumber } : null,
+          creator: declaration.creator ? { fullName: declaration.creator.fullName ?? "", cedulaNumber: declaration.creator.cedulaNumber ?? null } : null,
+          invited: declaration.invited ? { fullName: declaration.invited.fullName ?? "", cedulaNumber: declaration.invited.cedulaNumber ?? null } : null,
         });
 
         const hash = computeHash(canonical);

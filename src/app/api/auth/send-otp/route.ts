@@ -11,6 +11,11 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = email.toLowerCase().trim();
 
+    // Validate email format
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return NextResponse.json({ error: "Formato de correo inválido" }, { status: 400 });
+    }
+
     // Rate limit: max 3 OTP sends per email per 15 minutes
     const limit = checkOtpSendLimit(normalizedEmail);
     if (!limit.allowed) {

@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isValidUuid } from "@/lib/validate-uuid";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { token: string } }
 ) {
   try {
+    if (!isValidUuid(params.token)) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 400 });
+    }
+
     const declaration = await db.declaration.findUnique({
       where: { inviteToken: params.token },
       include: {

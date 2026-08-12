@@ -20,7 +20,10 @@ export async function GET(
         invited: { select: { id: true, fullName: true, email: true } },
         clauses: { orderBy: { type: "asc" } },
         postMeetings: true,
-        auditLogs: { orderBy: { timestamp: "desc" } },
+        auditLogs: {
+        select: { id: true, action: true, timestamp: true, details: true },
+        orderBy: { timestamp: "desc" },
+      },
       },
     });
 
