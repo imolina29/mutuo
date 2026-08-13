@@ -281,9 +281,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ verified: true, matchScore, checks });
   } catch (err) {
-    console.error("[identity/verify] Unhandled error:", err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[identity/verify] Unhandled error:", errMsg, err);
+    // Return a hint about what failed (safe — no PII, no secrets)
+    let userHint = "Error interno al verificar identidad. Intenta de nuevo.";
+    if (errMsg.includes("SUPABASE")) userHint = "Error de configuración del almacenamiento. Contacta al administrador.";
+    if (errMsg.includes("ENCRYPTION_KEY")) userHint = "Error de configuración de cifrado. Contacta al administrador.";
+    if (errMsg.includes("Storage upload")) userHint = "Error al subir los archivos. Intenta de nuevo.";
     return NextResponse.json(
-      { error: "Error interno al verificar identidad. Intenta de nuevo." },
+      { error: userHint, debug: process.env.NODE_ENV === "development" ? errMsg : undefined },
       { status: 500 }
     );
   }
