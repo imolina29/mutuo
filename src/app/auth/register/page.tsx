@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function RegisterPage() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "";
   const [form, setForm] = useState({
     nombres: "",
     apellidos: "",
@@ -76,7 +79,7 @@ export default function RegisterPage() {
             <CardTitle className="text-2xl text-mutuo-primary">Registro exitoso</CardTitle>
             <CardDescription>
               Tu cuenta ha sido creada. Ahora puedes{" "}
-              <a href="/auth/login" className="text-mutuo-primary underline">iniciar sesión</a>.
+              <a href={`/auth/login${callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : ""}`} className="text-mutuo-primary underline">iniciar sesión</a>.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -203,7 +206,7 @@ export default function RegisterPage() {
           </form>
           <p className="mt-4 text-center text-sm text-mutuo-gray">
             ¿Ya tienes cuenta?{" "}
-            <a href="/auth/login" className="text-mutuo-primary underline">
+            <a href={`/auth/login${callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : ""}`} className="text-mutuo-primary underline">
               Inicia sesión
             </a>
           </p>

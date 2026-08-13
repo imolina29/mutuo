@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,7 +29,7 @@ export default function LoginPage() {
     });
 
     if (result?.ok) {
-      router.push("/dashboard");
+      router.push(callbackUrl);
     } else {
       setError("Correo o contraseña incorrectos.");
     }
@@ -83,7 +85,10 @@ export default function LoginPage() {
           </form>
           <p className="mt-4 text-center text-sm text-mutuo-gray">
             ¿No tienes cuenta?{" "}
-            <a href="/auth/register" className="text-mutuo-primary underline">
+            <a
+              href={`/auth/register${callbackUrl !== "/dashboard" ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : ""}`}
+              className="text-mutuo-primary underline"
+            >
               Regístrate aquí
             </a>
           </p>

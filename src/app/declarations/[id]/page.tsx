@@ -147,17 +147,17 @@ export default function DeclarationDetailPage() {
       )}
 
       {decl.status === "SIGNED" && (
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" className="flex-1 min-w-[8rem]">
+        <div className="grid grid-cols-2 gap-2">
+          <Button asChild variant="outline">
             <Link href={`/declarations/${id}/verify`}>Verificar integridad</Link>
           </Button>
-          <Button asChild className="flex-1 min-w-[8rem] bg-mutuo-primary hover:bg-mutuo-primary-light">
+          <Button asChild className="bg-mutuo-primary hover:bg-mutuo-primary-light">
             <Link href={`/declarations/${id}/post`}>Registrar post-encuentro</Link>
           </Button>
           <Button
             onClick={() => handleAction("cancel")}
             variant="outline"
-            className="flex-1 min-w-[8rem] text-mutuo-danger"
+            className="text-mutuo-danger"
             disabled={actionLoading}
             aria-busy={actionLoading}
           >
@@ -166,7 +166,6 @@ export default function DeclarationDetailPage() {
           <Button
             onClick={() => handleAction("revoke")}
             variant="destructive"
-            className="flex-1 min-w-[8rem]"
             disabled={actionLoading}
             aria-busy={actionLoading}
           >
