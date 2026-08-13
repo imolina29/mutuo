@@ -51,6 +51,18 @@ export async function POST(
     const meta = extractRequestMeta(req);
     const now = new Date();
 
+    // Build identity snapshot for the signing user
+    const signerUser = await db.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { fullName: true, nombres: true, apellidos: true, cedulaNumber: true, email: true },
+    });
+    const signerSnapshot = {
+      fullName: signerUser.fullName ?? [signerUser.nombres, signerUser.apellidos].filter(Boolean).join(" "),
+      cedulaNumber: signerUser.cedulaNumber,
+      email: signerUser.email,
+      signedAt: now.toISOString(),
+    };
+
     // --- Transaction with status check INSIDE to prevent race conditions ---
     const result = await db.$transaction(async (tx) => {
       // Re-read status inside transaction (SELECT FOR UPDATE equivalent)
@@ -70,9 +82,10 @@ export async function POST(
         }
       }
 
+      // Save identity snapshot + sign timestamp
       const signData = isCreator
-        ? { signedByAAt: now, status: "PENDING_B" as const }
-        : { signedByBAt: now };
+        ? { signedByAAt: now, status: "PENDING_B" as const, creatorSnapshot: signerSnapshot }
+        : { signedByBAt: now, invitedSnapshot: signerSnapshot };
 
       await tx.declaration.update({
         where: { id: params.id },
@@ -103,6 +116,14 @@ export async function POST(
     if (result.status === "SIGNED" && result.needsSeal) {
       // --- TSA call OUTSIDE transaction to avoid timeout ---
       try {
+        // Re-read the declaration to get the saved snapshots
+        const sealed = await db.declaration.findUniqueOrThrow({
+          where: { id: params.id },
+          select: { creatorSnapshot: true, invitedSnapshot: true },
+        });
+        const cSnap = sealed.creatorSnapshot as Record<string, string> | null;
+        const iSnap = sealed.invitedSnapshot as Record<string, string> | null;
+
         const canonical = buildCanonicalDocument({
           id: declaration.id,
           creatorId: declaration.creatorId,
@@ -117,8 +138,8 @@ export async function POST(
             text: c.text,
             version: c.version,
           })),
-          creator: declaration.creator ? { fullName: declaration.creator.fullName ?? "", cedulaNumber: declaration.creator.cedulaNumber ?? null } : null,
-          invited: declaration.invited ? { fullName: declaration.invited.fullName ?? "", cedulaNumber: declaration.invited.cedulaNumber ?? null } : null,
+          creator: cSnap ? { fullName: cSnap.fullName ?? "", cedulaNumber: cSnap.cedulaNumber ?? null } : null,
+          invited: iSnap ? { fullName: iSnap.fullName ?? "", cedulaNumber: iSnap.cedulaNumber ?? null } : null,
         });
 
         const hash = computeHash(canonical);

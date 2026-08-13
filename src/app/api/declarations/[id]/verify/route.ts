@@ -17,8 +17,6 @@ export async function GET(
     const declaration = await db.declaration.findUnique({
       where: { id: params.id },
       include: {
-        creator: { select: { id: true, fullName: true, cedulaNumber: true } },
-        invited: { select: { id: true, fullName: true, cedulaNumber: true } },
         clauses: true,
       },
     });
@@ -38,6 +36,10 @@ export async function GET(
       );
     }
 
+    // Use frozen snapshots for verification — they match what was hashed at sealing time
+    const cSnap = declaration.creatorSnapshot as Record<string, string> | null;
+    const iSnap = declaration.invitedSnapshot as Record<string, string> | null;
+
     const isIntact = verifyIntegrity(
       {
         id: declaration.id,
@@ -53,8 +55,8 @@ export async function GET(
           text: c.text,
           version: c.version,
         })),
-        creator: declaration.creator ? { fullName: declaration.creator.fullName ?? "", cedulaNumber: declaration.creator.cedulaNumber } : null,
-        invited: declaration.invited ? { fullName: declaration.invited.fullName ?? "", cedulaNumber: declaration.invited.cedulaNumber } : null,
+        creator: cSnap ? { fullName: cSnap.fullName ?? "", cedulaNumber: cSnap.cedulaNumber ?? null } : null,
+        invited: iSnap ? { fullName: iSnap.fullName ?? "", cedulaNumber: iSnap.cedulaNumber ?? null } : null,
       },
       declaration.sealedHash
     );

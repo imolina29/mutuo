@@ -21,9 +21,9 @@ export async function GET(
         clauses: { orderBy: { type: "asc" } },
         postMeetings: true,
         auditLogs: {
-        select: { id: true, action: true, timestamp: true, details: true },
-        orderBy: { timestamp: "desc" },
-      },
+          select: { id: true, action: true, timestamp: true, details: true },
+          orderBy: { timestamp: "desc" },
+        },
       },
     });
 
@@ -35,7 +35,21 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
-    return NextResponse.json(declaration);
+    // If a participant deleted their account, use the frozen snapshot
+    const creatorSnapshot = declaration.creatorSnapshot as Record<string, string> | null;
+    const invitedSnapshot = declaration.invitedSnapshot as Record<string, string> | null;
+
+    const response = {
+      ...declaration,
+      creator: declaration.creator ?? (creatorSnapshot
+        ? { id: null, fullName: creatorSnapshot.fullName, email: "(cuenta eliminada)", deleted: true }
+        : null),
+      invited: declaration.invited ?? (invitedSnapshot
+        ? { id: null, fullName: invitedSnapshot.fullName, email: "(cuenta eliminada)", deleted: true }
+        : null),
+    };
+
+    return NextResponse.json(response);
   } catch (err) {
     console.error("[declarations/[id]/GET] Error:", err);
     return NextResponse.json({ error: "Error al obtener la declaración" }, { status: 500 });

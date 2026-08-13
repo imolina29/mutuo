@@ -107,6 +107,9 @@ model Declaration {
   maxRounds            Int               @default(3) @map("max_rounds")
   signedByAAt          DateTime?         @map("signed_by_a_at")
   signedByBAt          DateTime?         @map("signed_by_b_at")
+  // Identity snapshots — frozen at signing, survive account deletion
+  creatorSnapshot      Json?             @map("creator_snapshot")  // {fullName, cedulaNumber, email}
+  invitedSnapshot      Json?             @map("invited_snapshot")  // {fullName, cedulaNumber, email}
   sealedHash           String?           @map("sealed_hash")
   tsaResponse          Bytes?            @map("tsa_response")
   sealedAt             DateTime?         @map("sealed_at")
