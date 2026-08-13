@@ -31,8 +31,22 @@ export async function GET(
       return NextResponse.json({ error: "Declaración no encontrada" }, { status: 404 });
     }
 
-    if (declaration.creatorId !== user.id && declaration.invitedId !== user.id) {
+    // Check if user is a participant OR has a valid invite token
+    const isParticipant = declaration.creatorId === user.id || declaration.invitedId === user.id;
+    const token = req.nextUrl.searchParams.get("token");
+    const hasValidToken = token && declaration.inviteToken === token;
+
+    if (!isParticipant && !hasValidToken) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
+    // Auto-link invited user if they have a valid token and aren't linked yet
+    if (hasValidToken && !declaration.invitedId && declaration.creatorId !== user.id) {
+      await db.declaration.update({
+        where: { id: params.id },
+        data: { invitedId: user.id },
+      });
+      declaration.invitedId = user.id;
     }
 
     // If a participant deleted their account, use the frozen snapshot

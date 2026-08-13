@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +12,8 @@ import type { DeclarationWithRelations } from "@/types";
 
 export default function SignPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
   const router = useRouter();
   const [declaration, setDeclaration] = useState<DeclarationWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,7 +25,8 @@ export default function SignPage() {
   );
 
   useEffect(() => {
-    fetch(`/api/declarations/${id}`)
+    const tokenParam = token ? `?token=${token}` : "";
+    fetch(`/api/declarations/${id}${tokenParam}`)
       .then(async (res) => {
         if (res.ok) {
           setDeclaration(await res.json());
@@ -36,13 +39,14 @@ export default function SignPage() {
         setError("Error de conexión");
         setLoading(false);
       });
-  }, [id]);
+  }, [id, token]);
 
   async function handleSign() {
     setSigning(true);
     setError(null);
     try {
-      const res = await fetch(`/api/declarations/${id}/sign`, { method: "POST" });
+      const tokenParam = token ? `?token=${token}` : "";
+      const res = await fetch(`/api/declarations/${id}/sign${tokenParam}`, { method: "POST" });
       const data = await res.json();
       if (res.ok) {
         setResult(data);

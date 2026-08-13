@@ -35,10 +35,24 @@ export async function POST(req: NextRequest) {
       clauses.unshift({ type: "VOLUNTARY_MEETING", text: template.text });
     }
 
+    // Snapshot creator identity at declaration time (survives account deletion)
+    const creatorUser = await db.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { fullName: true, nombres: true, apellidos: true, cedulaNumber: true, email: true },
+    });
+    const creatorSnapshot = {
+      fullName: creatorUser.fullName ?? [creatorUser.nombres, creatorUser.apellidos].filter(Boolean).join(" "),
+      cedulaNumber: creatorUser.cedulaNumber,
+      email: creatorUser.email,
+      signedAt: new Date().toISOString(),
+    };
+
     const declaration = await db.declaration.create({
       data: {
         creatorId: user.id,
         status: "PENDING_B",
+        signedByAAt: new Date(), // Creator signs by submitting the declaration
+        creatorSnapshot,
         meetingDate: new Date(meetingDate),
         meetingPlace,
         meetingType,

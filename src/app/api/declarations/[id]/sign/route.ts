@@ -37,10 +37,20 @@ export async function POST(
     }
 
     const isCreator = declaration.creatorId === user.id;
-    const isInvited = declaration.invitedId === user.id;
+    let isInvited = declaration.invitedId === user.id;
 
+    // Auto-link invited user via invite token if not yet linked
     if (!isCreator && !isInvited) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+      const token = req.nextUrl.searchParams.get("token");
+      if (token && declaration.inviteToken === token && !declaration.invitedId) {
+        await db.declaration.update({
+          where: { id: params.id },
+          data: { invitedId: user.id },
+        });
+        isInvited = true;
+      } else {
+        return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+      }
     }
 
     const otherPartyId = isCreator ? declaration.invitedId : declaration.creatorId;
