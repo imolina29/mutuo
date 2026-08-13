@@ -205,21 +205,12 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Determine result ---
-    // Must pass: cédula number + at least one name field (nombres OR apellidos)
-    const nameOk = nombresMatch || apellidosMatch;
-    const passed = cedulaMatch && nameOk;
+    // Cédula number match is sufficient — it's unique per person in Colombia.
+    // Name matching is advisory (OCR often fails on cédula photos).
+    const passed = cedulaMatch;
 
     if (!passed) {
-      // Provide specific guidance
-      let guidance = "";
-      if (!cedulaMatch && !nameOk) {
-        guidance = "Ni el número de cédula ni el nombre coinciden. Verifica que los datos de tu perfil sean exactamente los mismos de tu cédula.";
-      } else if (!cedulaMatch) {
-        guidance = "El nombre coincide pero el número de cédula no. Revisa que tu número de cédula en el perfil esté correcto.";
-      } else {
-        guidance = "El número de cédula coincide pero el nombre no fue reconocido. Intenta con una foto donde los nombres y apellidos se lean claramente.";
-      }
-
+      const guidance = "El número de cédula no coincide. Verifica que el número en tu perfil sea exactamente el mismo que aparece en tu cédula.";
       return NextResponse.json(
         { error: guidance, checks },
         { status: 422 }
