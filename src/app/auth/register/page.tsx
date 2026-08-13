@@ -99,7 +99,7 @@ export default function RegisterPage() {
               <Label htmlFor="nombres">Nombres <span className="text-xs text-muted-foreground">(como aparecen en tu cédula)</span></Label>
               <Input
                 id="nombres"
-                placeholder="Ej: IVAN ERNESTO"
+                placeholder="Ej: MARÍA CAMILA"
                 value={form.nombres}
                 onChange={(e) => setForm({ ...form, nombres: e.target.value })}
                 required
@@ -110,7 +110,7 @@ export default function RegisterPage() {
               <Label htmlFor="apellidos">Apellidos <span className="text-xs text-muted-foreground">(como aparecen en tu cédula)</span></Label>
               <Input
                 id="apellidos"
-                placeholder="Ej: MOLINA RUIZ"
+                placeholder="Ej: GARCÍA LÓPEZ"
                 value={form.apellidos}
                 onChange={(e) => setForm({ ...form, apellidos: e.target.value })}
                 required
@@ -121,7 +121,7 @@ export default function RegisterPage() {
               <Label htmlFor="cedula">Número de cédula <span className="text-xs text-muted-foreground">(solo números)</span></Label>
               <Input
                 id="cedula"
-                placeholder="Ej: 1069489619"
+                placeholder="Ej: 1234567890"
                 value={form.cedulaNumber}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^0-9]/g, "");

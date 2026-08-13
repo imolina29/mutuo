@@ -43,13 +43,13 @@ export async function ocrCedulaClient(
  * Parses OCR text from the front of a Colombian cédula.
  *
  * IMPORTANT: In Colombian cédulas, the VALUE appears BEFORE the label:
- *   MOLINA RUIZ        ← value
+ *   GARCÍA LÓPEZ        ← value
  *   APELLIDOS           ← label
- *   IVAN ERNESTO        ← value
+ *   MARÍA CAMILA        ← value
  *   NOMBRES             ← label
  *
  * Common OCR errors on cédulas:
- *   - "IVAN" → "¡VAN" or "1VAN" (I confused with ¡ or 1)
+ *   - "MARÍA" → "MAR¡A" or "MAR1A" (I confused with ¡ or 1)
  *   - "NOMBRES" → "NDMBRES" or "NQMBRES" (O confused with D/Q)
  *   - Leading digit of number lost or changed (1 → 4, etc)
  *   - "NUMERO" → "NUMER0" (O → 0)
