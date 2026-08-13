@@ -128,16 +128,37 @@ export default function IdentityVerifyPage() {
               ))}
               {checks.some((c) => !c.passed) && (
                 <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
-                  💡 Asegúrate de que la foto de la cédula sea clara y que los datos en tu perfil
-                  coincidan exactamente con tu cédula de ciudadanía.
+                  💡 Asegúrate de que la foto de la cédula sea clara, con buena iluminación y sin
+                  reflejos. Los datos en tu perfil deben coincidir exactamente con tu cédula.
                 </p>
               )}
             </div>
           )}
 
-          <CedulaUpload side="front" onFileSelected={setCedulaFront} />
-          <CedulaUpload side="back" onFileSelected={setCedulaBack} />
-          <SelfieCapture onCapture={setSelfie} />
+          {/* Cédula front */}
+          <div>
+            <CedulaUpload side="front" onFileSelected={setCedulaFront} />
+            <p className="text-xs text-muted-foreground mt-1">
+              📸 Foto clara del frente de la cédula. Evita reflejos y sombras.
+            </p>
+          </div>
+
+          {/* Cédula back */}
+          <div>
+            <CedulaUpload side="back" onFileSelected={setCedulaBack} />
+            <p className="text-xs text-muted-foreground mt-1">
+              📸 Foto clara del reverso de la cédula.
+            </p>
+          </div>
+
+          {/* Selfie */}
+          <div>
+            <SelfieCapture onCapture={setSelfie} />
+            <p className="text-xs text-muted-foreground mt-1">
+              🤳 Toma una foto de <strong>tu rostro</strong> (no de la cédula).
+              Esto confirma que eres tú quien se está registrando.
+            </p>
+          </div>
 
           {/* Progress / status area */}
           {statusMessage && (
