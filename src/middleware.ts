@@ -16,7 +16,9 @@ function csrfCheck(req: NextRequest): NextResponse | null {
   if (req.nextUrl.pathname.startsWith("/api/auth/")) return null;
 
   const origin = req.headers.get("origin");
-  const appUrl = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+  // Use the request's own origin — always matches the actual URL the user sees,
+  // regardless of Vercel aliases, deployment URLs, or env var mismatches.
+  const expectedOrigin = req.nextUrl.origin;
 
   // If no Origin header, check Referer as fallback
   if (!origin) {
@@ -24,7 +26,6 @@ function csrfCheck(req: NextRequest): NextResponse | null {
     if (referer) {
       try {
         const refererOrigin = new URL(referer).origin;
-        const expectedOrigin = new URL(appUrl).origin;
         if (refererOrigin !== expectedOrigin) {
           return NextResponse.json({ error: "Solicitud rechazada (CSRF)" }, { status: 403 });
         }
@@ -36,13 +37,8 @@ function csrfCheck(req: NextRequest): NextResponse | null {
   }
 
   // Compare origin
-  try {
-    const expectedOrigin = new URL(appUrl).origin;
-    if (origin !== expectedOrigin) {
-      return NextResponse.json({ error: "Solicitud rechazada (CSRF)" }, { status: 403 });
-    }
-  } catch {
-    // Can't parse APP_URL — skip check in dev
+  if (origin !== expectedOrigin) {
+    return NextResponse.json({ error: "Solicitud rechazada (CSRF)" }, { status: 403 });
   }
 
   return null;
