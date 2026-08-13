@@ -101,7 +101,8 @@ export default function DeclarationDetailPage() {
   }
 
   const isCreator = decl.creatorId === session?.user.id;
-  const inviteUrl = typeof window !== "undefined" ? `${window.location.origin}/invite/${decl.inviteToken}` : "";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
+  const inviteUrl = baseUrl ? `${baseUrl}/invite/${decl.inviteToken}` : "";
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-8 w-full space-y-6">

@@ -74,7 +74,8 @@ export default function NewDeclarationPage() {
   }
 
   if (step === 3 && inviteToken) {
-    const inviteUrl = `${window.location.origin}/invite/${inviteToken}`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    const inviteUrl = `${baseUrl}/invite/${inviteToken}`;
     return (
       <main className="max-w-lg mx-auto px-4 py-8 w-full">
         <Card>
